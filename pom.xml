@@ -11,4 +11,13 @@
         <maven.compiler.target>17</maven.compiler.target>
         <exec.mainClass>com.gestionamateur.tpi.progav.TPIProgAv</exec.mainClass>
     </properties>
+
+    <!-- Dependencias externas del proyecto -->
+    <dependencies>
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf</artifactId>
+            <version>3.2.1</version>
+        </dependency>
+    </dependencies>
 </project>
