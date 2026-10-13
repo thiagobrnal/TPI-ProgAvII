@@ -1,0 +1,4 @@
+oct 13, 2026 11:38:46 A. M. com.gestionamateur.tpi.progav.modelo.Usuario <init>
+INFO: Cuenta de usuario creada con éxito: admin (Rol: ADMINISTRADOR)
+oct 13, 2026 11:38:50 A. M. com.gestionamateur.tpi.progav.modelo.Usuario verificarCredenciales
+WARNING: Intento de acceso denegado: Credenciales incorrectas para el usuario admin
