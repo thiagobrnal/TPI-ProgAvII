@@ -21,8 +21,10 @@ public class FrmPrincipal extends javax.swing.JFrame {
         if(usuario.getRol() == TiposDatos.Rol.ARBITRO) {
             btnGestionarEquipos.setEnabled(false); // Un árbitro no da de alta equipos
             btnAltaJugadores.setEnabled(false);    // Tampoco da de alta jugadores
+            btnGestionarCanchas.setEnabled(false); // Un árbitro no gestiona canchas
         } else if (usuario.getRol() == TiposDatos.Rol.CAPITAN) {
             btnProgramarPartidos.setEnabled(false); // Un capitán no puede programar el fixture
+            btnGestionarCanchas.setEnabled(false); // Un capitán no gestiona canchas
         }
     }
 
@@ -39,6 +41,7 @@ public class FrmPrincipal extends javax.swing.JFrame {
         lblBienvenida = new javax.swing.JLabel();
         btnGestionarEquipos = new javax.swing.JButton();
         btnAltaJugadores = new javax.swing.JButton();
+        btnGestionarCanchas = new javax.swing.JButton(); // Instanciamos el nuevo botón
         btnProgramarPartidos = new javax.swing.JButton();
         btnCerrarSesion = new javax.swing.JButton();
 
@@ -61,6 +64,13 @@ public class FrmPrincipal extends javax.swing.JFrame {
         btnAltaJugadores.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 btnAltaJugadoresActionPerformed(evt);
+            }
+        });
+
+        btnGestionarCanchas.setText("Gestionar Sedes / Canchas"); // Configuración del nuevo botón
+        btnGestionarCanchas.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btnGestionarCanchasActionPerformed(evt);
             }
         });
 
@@ -94,6 +104,7 @@ public class FrmPrincipal extends javax.swing.JFrame {
                     .addComponent(lblTitulo, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .addComponent(btnGestionarEquipos, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .addComponent(btnAltaJugadores, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addComponent(btnGestionarCanchas, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .addComponent(btnProgramarPartidos, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
                 .addGap(133, 133, 133))
         );
@@ -111,8 +122,10 @@ public class FrmPrincipal extends javax.swing.JFrame {
                 .addGap(18, 18, 18)
                 .addComponent(btnAltaJugadores, javax.swing.GroupLayout.PREFERRED_SIZE, 40, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addGap(18, 18, 18)
+                .addComponent(btnGestionarCanchas, javax.swing.GroupLayout.PREFERRED_SIZE, 40, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(18, 18, 18)
                 .addComponent(btnProgramarPartidos, javax.swing.GroupLayout.PREFERRED_SIZE, 40, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(78, Short.MAX_VALUE))
+                .addContainerGap(40, Short.MAX_VALUE))
         );
 
         pack();
@@ -122,11 +135,18 @@ public class FrmPrincipal extends javax.swing.JFrame {
         // Interacción entre ventanas: Llamada a la interfaz ya construida
         FrmAltaEquipo ventanaEquipos = new FrmAltaEquipo();
         ventanaEquipos.setVisible(true);
-        this.dispose();
     }
 
     private void btnAltaJugadoresActionPerformed(java.awt.event.ActionEvent evt) {
-        javax.swing.JOptionPane.showMessageDialog(this, "Módulo en construcción para el próximo sprint.");
+        // Llamada a la nueva vista de jugadores
+        FrmAltaJugador ventanaJugadores = new FrmAltaJugador();
+        ventanaJugadores.setVisible(true);
+    }
+
+    private void btnGestionarCanchasActionPerformed(java.awt.event.ActionEvent evt) {
+        // Llamada a la nueva vista de canchas
+        FrmAltaCancha ventanaCanchas = new FrmAltaCancha();
+        ventanaCanchas.setVisible(true);
     }
 
     private void btnProgramarPartidosActionPerformed(java.awt.event.ActionEvent evt) {
@@ -142,6 +162,7 @@ public class FrmPrincipal extends javax.swing.JFrame {
     private javax.swing.JButton btnAltaJugadores;
     private javax.swing.JButton btnCerrarSesion;
     private javax.swing.JButton btnGestionarEquipos;
+    private javax.swing.JButton btnGestionarCanchas;
     private javax.swing.JButton btnProgramarPartidos;
     private javax.swing.JLabel lblBienvenida;
     private javax.swing.JLabel lblTitulo;
