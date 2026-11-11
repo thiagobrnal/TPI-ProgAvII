@@ -51,6 +51,33 @@ public class GestorEquipos {
         }
     }
 
+    /** CU-01 (alternativa A1): edicion de un equipo registrado. */
+    public String actualizarEquipo(Long idEquipo, String nombre, Categoria categoria, String colorCamiseta,
+                                   Cancha sede, Usuario capitan, Usuario operador) {
+        if (idEquipo == null) {
+            return "ERROR: Debe indicar el equipo a editar.";
+        }
+        if (nombre == null || nombre.trim().isEmpty()) {
+            return "ERROR: El nombre del equipo no puede estar vacío.";
+        }
+        if (categoria == null || categoria.getId() == null) {
+            return "ERROR: Debe seleccionar una categoría válida.";
+        }
+        if (capitan == null || capitan.getId() == null) {
+            return "ERROR: Debe asignar un capitán con cuenta de usuario registrada.";
+        }
+        try {
+            Equipo eq = equipoService.actualizarEquipo(idEquipo, nombre.trim(), null, categoria.getId(),
+                    colorCamiseta, capitan.getId(), sede, operador);
+            return "ÉXITO: El equipo '" + nombre + "' fue actualizado correctamente (ID: " + idEquipo + ").";
+        } catch (TorneoExcepcion te) {
+            return "ERROR DE VALIDACIÓN: " + te.getMessage();
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Fallo de persistencia JDBC al actualizar equipo: " + e.getMessage());
+            return "ERROR DE CONEXIÓN: La base de datos no está disponible (" + e.getMessage() + "). No se guardaron cambios.";
+        }
+    }
+
     public Equipo buscarEquipoDeCapitan(Long idCapitan) {
         try {
             return equipoDAO.buscarPorCapitan(idCapitan);

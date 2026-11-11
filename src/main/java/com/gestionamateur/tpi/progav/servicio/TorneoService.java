@@ -36,11 +36,12 @@ public class TorneoService {
     }
 
     public Torneo crearTorneo(String nombre, String formato, int cupoEquipos, Date fechaInicio, Usuario operador) throws TorneoExcepcion {
-        if (operador != null) {
-            TiposDatos.Rol rol = operador.getRol();
-            if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR) {
-                throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para crear torneos.");
-            }
+        if (operador == null) {
+            throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para crear torneos.");
+        }
+        TiposDatos.Rol rol = operador.getRol();
+        if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR) {
+            throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para crear torneos.");
         }
         Torneo torneo = new Torneo(nombre, formato, cupoEquipos, fechaInicio);
         try (Connection conn = ConexionBD.obtenerConexion()) {
@@ -71,11 +72,12 @@ public class TorneoService {
     }
 
     public Fase agregarFase(Long idTorneo, String nombreFase, int orden, boolean limpiaAmarillas, Usuario operador) throws TorneoExcepcion {
-        if (operador != null) {
-            TiposDatos.Rol rol = operador.getRol();
-            if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR) {
-                throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para agregar fases.");
-            }
+        if (operador == null) {
+            throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para agregar fases.");
+        }
+        TiposDatos.Rol rol = operador.getRol();
+        if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR) {
+            throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para agregar fases.");
         }
         try (Connection conn = ConexionBD.obtenerConexion()) {
             Torneo t = torneoDAO.buscarPorId(conn, idTorneo);
@@ -125,11 +127,12 @@ public class TorneoService {
     }
 
     public void actualizarEstadoTorneo(Long idTorneo, String nuevoEstado, Usuario operador) throws TorneoExcepcion {
-        if (operador != null) {
-            TiposDatos.Rol rol = operador.getRol();
-            if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR) {
-                throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para actualizar estado de torneos.");
-            }
+        if (operador == null) {
+            throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para actualizar el estado de un torneo.");
+        }
+        TiposDatos.Rol rol = operador.getRol();
+        if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR) {
+            throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para actualizar estado de torneos.");
         }
         try (Connection conn = ConexionBD.obtenerConexion()) {
             torneoDAO.actualizarEstado(conn, idTorneo, nuevoEstado);

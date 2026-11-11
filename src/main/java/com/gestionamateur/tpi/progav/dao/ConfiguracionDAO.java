@@ -65,6 +65,29 @@ public class ConfiguracionDAO {
         return mapa;
     }
 
+    /**
+     * Devuelve la descripcion asociada a cada parametro global (solo lectura).
+     * Complementa a {@link #obtenerMapa()} para poder presentar clave, valor y descripcion
+     * en la capa de presentacion de CU-18 (Gestionar configuracion general).
+     */
+    public Map<String, String> obtenerDescripciones() throws SQLException {
+        try (Connection conn = ConexionBD.obtenerConexion()) {
+            return obtenerDescripciones(conn);
+        }
+    }
+
+    public Map<String, String> obtenerDescripciones(Connection conn) throws SQLException {
+        String sql = "SELECT clave, descripcion FROM configuraciones";
+        Map<String, String> mapa = new HashMap<>();
+        try (PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                mapa.put(rs.getString("clave"), rs.getString("descripcion"));
+            }
+        }
+        return mapa;
+    }
+
     public Configuracion obtenerConfiguracion() throws SQLException {
         try (Connection conn = ConexionBD.obtenerConexion()) {
             Map<String, Integer> mapa = obtenerMapa(conn);

@@ -72,14 +72,15 @@ public class ReclamoService {
     }
 
     public Reclamo presentarReclamoPartido(Long idPartido, Long idCapitan, String motivo, Usuario operador) throws TorneoExcepcion {
-        if (operador != null) {
-            TiposDatos.Rol rol = operador.getRol();
-            if (rol != TiposDatos.Rol.CAPITAN && rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR) {
-                throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para presentar reclamos.");
-            }
-            if (rol == TiposDatos.Rol.CAPITAN && operador.getId() != null && !operador.getId().equals(idCapitan)) {
-                throw new TorneoExcepcion("Acceso denegado: El operador autenticado no coincide con el capitán que suscribe el reclamo.");
-            }
+        if (operador == null) {
+            throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para presentar reclamos.");
+        }
+        TiposDatos.Rol rol = operador.getRol();
+        if (rol != TiposDatos.Rol.CAPITAN && rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR) {
+            throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para presentar reclamos.");
+        }
+        if (rol == TiposDatos.Rol.CAPITAN && operador.getId() != null && !operador.getId().equals(idCapitan)) {
+            throw new TorneoExcepcion("Acceso denegado: El operador autenticado no coincide con el capitán que suscribe el reclamo.");
         }
 
         if (motivo == null || motivo.trim().length() < 15) {
@@ -135,14 +136,15 @@ public class ReclamoService {
     }
 
     public Reclamo apelarSancion(Long idSancion, Long idCapitan, String motivo, Usuario operador) throws TorneoExcepcion {
-        if (operador != null) {
-            TiposDatos.Rol rol = operador.getRol();
-            if (rol != TiposDatos.Rol.CAPITAN && rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR) {
-                throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para apelar sanciones.");
-            }
-            if (rol == TiposDatos.Rol.CAPITAN && operador.getId() != null && !operador.getId().equals(idCapitan)) {
-                throw new TorneoExcepcion("Acceso denegado: El operador autenticado no coincide con el capitán que suscribe la apelación.");
-            }
+        if (operador == null) {
+            throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para apelar sanciones.");
+        }
+        TiposDatos.Rol rol = operador.getRol();
+        if (rol != TiposDatos.Rol.CAPITAN && rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR) {
+            throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para apelar sanciones.");
+        }
+        if (rol == TiposDatos.Rol.CAPITAN && operador.getId() != null && !operador.getId().equals(idCapitan)) {
+            throw new TorneoExcepcion("Acceso denegado: El operador autenticado no coincide con el capitán que suscribe la apelación.");
         }
 
         if (motivo == null || motivo.trim().length() < 15) {
@@ -204,11 +206,12 @@ public class ReclamoService {
     }
 
     public void resolverExpediente(Long idReclamo, String veredicto, String justificacion, Usuario operador) throws TorneoExcepcion {
-        if (operador != null) {
-            TiposDatos.Rol rol = operador.getRol();
-            if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR) {
-                throw new TorneoExcepcion("Acceso denegado: Sólo usuarios con rol ADMINISTRADOR u ORGANIZADOR (Tribunal) pueden resolver expedientes.");
-            }
+        if (operador == null) {
+            throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para resolver expedientes.");
+        }
+        TiposDatos.Rol rol = operador.getRol();
+        if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR) {
+            throw new TorneoExcepcion("Acceso denegado: Sólo usuarios con rol ADMINISTRADOR u ORGANIZADOR (Tribunal) pueden resolver expedientes.");
         }
         if (veredicto == null || veredicto.trim().isEmpty()) {
             throw new TorneoExcepcion("El veredicto formal es obligatorio.");

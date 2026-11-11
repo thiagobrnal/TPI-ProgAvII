@@ -4,6 +4,7 @@ import com.gestionamateur.tpi.progav.dao.PartidoDAO;
 import com.gestionamateur.tpi.progav.dao.PartidoEquipoDAO;
 import com.gestionamateur.tpi.progav.modelo.Arbitro;
 import com.gestionamateur.tpi.progav.modelo.Cancha;
+import com.gestionamateur.tpi.progav.modelo.Cronologia;
 import com.gestionamateur.tpi.progav.modelo.Equipo;
 import com.gestionamateur.tpi.progav.modelo.Motivo;
 import com.gestionamateur.tpi.progav.modelo.Partido;
@@ -12,6 +13,7 @@ import com.gestionamateur.tpi.progav.modelo.TiposDatos;
 import com.gestionamateur.tpi.progav.modelo.TorneoExcepcion;
 import com.gestionamateur.tpi.progav.modelo.Usuario;
 import com.gestionamateur.tpi.progav.servicio.PartidoService;
+import java.sql.SQLException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -51,22 +53,21 @@ public class GestorPartidos {
             }
 
             if (local.getIdEquipo() != null && visitante.getIdEquipo() != null && sede.getIdCancha() != null) {
+                Long idFase = resolverIdFaseVigente();
+                if (idFase == null) {
+                    return "ERROR: No hay ninguna fase disponible para el encuentro. "
+                            + "Cree un torneo con al menos una fase antes de programar partidos.";
+                }
                 Arbitro arbitroAsignado = buscarArbitroDisponible(fechaHora);
-                Long idArbitro = arbitroAsignado != null ? arbitroAsignado.getId() : null;
-                Long idFase = null;
-                try {
-                    com.gestionamateur.tpi.progav.dao.FaseDAO fDao = new com.gestionamateur.tpi.progav.dao.FaseDAO();
-                    List<com.gestionamateur.tpi.progav.modelo.Fase> fases = fDao.buscarPorTorneo(1L);
-                    if (fases != null && !fases.isEmpty()) {
-                        idFase = fases.get(0).getIdFase();
-                    }
-                } catch (Exception ignored) {}
+                if (arbitroAsignado == null) {
+                    return "ERROR: No hay ningun arbitro disponible para el horario seleccionado. "
+                            + "Registre un arbitro o elija otra franja horaria.";
+                }
+                Long idArbitro = arbitroAsignado.getId();
                 Partido pBD = partidoService.programarPartido(idFase, local.getIdEquipo(), visitante.getIdEquipo(), sede.getIdCancha(), idArbitro, fechaHora, 90, operador);
                 dbPartidos.add(pBD);
                 String msg = "ÉXITO: Partido #" + pBD.getIdPartido() + " registrado en la base de datos (" + local.getNombre() + " vs " + visitante.getNombre() + ").";
-                if (arbitroAsignado != null) {
-                    msg += "\nÁrbitro asignado: " + arbitroAsignado.getNombre() + " " + arbitroAsignado.getApellido();
-                }
+                msg += "\nÁrbitro asignado: " + arbitroAsignado.getNombre() + " " + arbitroAsignado.getApellido();
                 return msg;
             } else {
                 return "ERROR: Los equipos y la sede deben estar registrados formalmente en la base de datos para programar el partido.";
@@ -87,16 +88,64 @@ public class GestorPartidos {
         return "ADVERTENCIA: Para persistir en base de datos debe asignar los equipos participantes.";
     }
 
-    // CU 3.1: Busca un árbitro registrado que no tenga otro partido asignado a la misma hora
+    /**
+     * Resuelve la fase donde se encuadra el encuentro: la primera fase del torneo vigente
+     * (el mas reciente que no este FINALIZADO y que tenga fases). Evita depender de un
+     * identificador de torneo fijo.
+     */
+    private Long resolverIdFaseVigente() {
+        try {
+            com.gestionamateur.tpi.progav.servicio.TorneoService torneoService =
+                    new com.gestionamateur.tpi.progav.servicio.TorneoService();
+            List<com.gestionamateur.tpi.progav.modelo.Torneo> torneos = torneoService.listarTodos();
+            for (com.gestionamateur.tpi.progav.modelo.Torneo t : torneos) {
+                if ("FINALIZADO".equalsIgnoreCase(t.getEstado())) {
+                    continue;
+                }
+                List<com.gestionamateur.tpi.progav.modelo.Fase> fases =
+                        new com.gestionamateur.tpi.progav.dao.FaseDAO().buscarPorTorneo(t.getIdTorneo());
+                if (fases != null && !fases.isEmpty()) {
+                    return fases.get(0).getIdFase();
+                }
+            }
+            for (com.gestionamateur.tpi.progav.modelo.Torneo t : torneos) {
+                List<com.gestionamateur.tpi.progav.modelo.Fase> fases =
+                        new com.gestionamateur.tpi.progav.dao.FaseDAO().buscarPorTorneo(t.getIdTorneo());
+                if (fases != null && !fases.isEmpty()) {
+                    return fases.get(0).getIdFase();
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.warning("No se pudieron resolver las fases disponibles del torneo: " + e.getMessage());
+        }
+        return null;
+    }
+
+    // CU 3.1: Busca un arbitro registrado que no tenga otro encuentro asignado
+    // en una franja horaria incompatible. La comprobacion se hace contra PostgreSQL.
     private Arbitro buscarArbitroDisponible(Date fechaHora) {
         List<Arbitro> arbitros = GestorUsuarios.getArbitrosRegistrados();
+        if (arbitros.isEmpty()) {
+            return null;
+        }
+        List<Partido> partidosPendientes = new ArrayList<>();
+        try {
+            partidosPendientes = partidoDAO.buscarPendientesDeFinalizacion();
+        } catch (SQLException e) {
+            LOGGER.warning("No se pudieron consultar los partidos pendientes para evaluar "
+                    + "la disponibilidad de arbitros: " + e.getMessage());
+        }
         for (Arbitro arb : arbitros) {
             boolean ocupado = false;
-            for (Partido p : dbPartidos) {
-                if (p.getEstadoPartido() == TiposDatos.EstadoPartido.PROGRAMADO
-                        && p.getArbitroDesignado() != null
-                        && p.getArbitroDesignado().getUsuario().equalsIgnoreCase(arb.getUsuario())
-                        && p.getFechaHora().equals(fechaHora)) {
+            for (Partido p : partidosPendientes) {
+                if (p.getArbitroDesignado() == null || p.getFechaHora() == null) {
+                    continue;
+                }
+                if (!p.getArbitroDesignado().getUsuario().equalsIgnoreCase(arb.getUsuario())) {
+                    continue;
+                }
+                long minutos = Math.abs(p.getFechaHora().getTime() - fechaHora.getTime()) / 60000L;
+                if (minutos < 90) {
                     ocupado = true;
                     break;
                 }
@@ -108,7 +157,36 @@ public class GestorPartidos {
         return null;
     }
 
-    // CU 4: Cargar resultados e incidencias (protocolo atómico de 11 pasos)
+    /**
+     * CU 4: Cierre oficial del acta con las incidencias registradas por el arbitro.
+     * El marcador se calcula a partir de la cronologia informada (PASO 6 del protocolo).
+     */
+    public String cerrarActa(Long idPartido, Date fechaHoraFinReal, List<Cronologia> incidencias, Usuario operador) {
+        try {
+            if (idPartido == null) {
+                return "ERROR: Debe seleccionar el partido a oficializar.";
+            }
+            if (fechaHoraFinReal == null) {
+                return "ERROR: Debe indicar la hora real de finalizacion del encuentro.";
+            }
+            if (operador == null) {
+                return "ERROR: No hay un arbitro autenticado en la sesion actual.";
+            }
+            partidoService.cerrarActaPartido(idPartido, fechaHoraFinReal, incidencias, operador);
+            sincronizarPartidoEnMemoria(idPartido);
+            return "ÉXITO: Acta cerrada y resultado oficializado en la base de datos.";
+        } catch (TorneoExcepcion ex) {
+            LOGGER.warning("Cierre de acta rechazado: " + ex.getMessage());
+            return "ERROR DE VALIDACIÓN: " + ex.getMessage();
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Fallo crítico al cerrar el acta", e);
+            return "ERROR DE CONEXIÓN: La base de datos no está disponible (" + e.getMessage() + "). No se guardaron cambios.";
+        }
+    }
+
+    /**
+     * CU 4: Cargar resultados e incidencias (protocolo atómico de 11 pasos)
+     */
     public String procesarActa(Long idPartido, String golesLocales, String golesVisitantes) {
         return procesarActa(idPartido, golesLocales, golesVisitantes, null);
     }

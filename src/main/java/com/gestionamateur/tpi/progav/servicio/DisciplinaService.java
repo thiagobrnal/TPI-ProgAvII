@@ -3,14 +3,18 @@ package com.gestionamateur.tpi.progav.servicio;
 import com.gestionamateur.tpi.progav.dao.ConexionBD;
 import com.gestionamateur.tpi.progav.dao.JugadorDAO;
 import com.gestionamateur.tpi.progav.dao.SancionDAO;
+import com.gestionamateur.tpi.progav.dao.TorneoDAO;
 import com.gestionamateur.tpi.progav.modelo.Jugador;
 import com.gestionamateur.tpi.progav.modelo.Sancion;
 import com.gestionamateur.tpi.progav.modelo.SistemaLogs;
 import com.gestionamateur.tpi.progav.modelo.TiposDatos;
+import com.gestionamateur.tpi.progav.modelo.Torneo;
 import com.gestionamateur.tpi.progav.modelo.TorneoExcepcion;
 import com.gestionamateur.tpi.progav.modelo.Usuario;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
 import java.util.logging.Logger;
 
@@ -19,15 +23,18 @@ public class DisciplinaService {
     private static final Logger LOGGER = Logger.getLogger(DisciplinaService.class.getName());
     private final SancionDAO sancionDAO;
     private final JugadorDAO jugadorDAO;
+    private final TorneoDAO torneoDAO;
 
     public DisciplinaService() {
         this.sancionDAO = new SancionDAO();
         this.jugadorDAO = new JugadorDAO();
+        this.torneoDAO = new TorneoDAO();
     }
 
     public DisciplinaService(SancionDAO sancionDAO, JugadorDAO jugadorDAO) {
         this.sancionDAO = sancionDAO;
         this.jugadorDAO = jugadorDAO;
+        this.torneoDAO = new TorneoDAO();
     }
 
     public List<Sancion> listarSancionesPendientesTribunal() throws TorneoExcepcion {
@@ -43,11 +50,12 @@ public class DisciplinaService {
     }
 
     public void emitirFalloTribunal(Long idSancion, int partidosSuspension, String motivo, String gravedad, Usuario operador) throws TorneoExcepcion {
-        if (operador != null) {
-            TiposDatos.Rol rol = operador.getRol();
-            if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR) {
-                throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para emitir fallos disciplinarios.");
-            }
+        if (operador == null) {
+            throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para emitir fallos disciplinarios.");
+        }
+        TiposDatos.Rol rol = operador.getRol();
+        if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR) {
+            throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para emitir fallos disciplinarios.");
         }
         if (partidosSuspension < 1) {
             throw new TorneoExcepcion("Una sanción disciplinaria debe tener al menos 1 fecha de suspensión.");
@@ -82,16 +90,87 @@ public class DisciplinaService {
         }
     }
 
+    /**
+     * CU-12 (alternativa A1): alta manual de una sancion administrativa (inhabilitacion
+     * o multa) decideda por el organizador, sin origen automatico de un partido.
+     * La sancion queda PENDIENTE hasta que el tribunal emita el fallo.
+     */
+    public Sancion registrarSancionAdministrativa(Long idJugador, int partidosSuspension, String motivo,
+                                                 String gravedad, Usuario operador) throws TorneoExcepcion {
+        if (operador == null) {
+            throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para registrar sanciones administrativas.");
+        }
+        TiposDatos.Rol rol = operador.getRol();
+        if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR) {
+            throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para registrar sanciones administrativas.");
+        }
+        if (partidosSuspension < 1) {
+            throw new TorneoExcepcion("Una sanción disciplinaria debe tener al menos 1 fecha de suspensión.");
+        }
+        if (motivo == null || motivo.trim().length() < 10) {
+            throw new TorneoExcepcion("El motivo de la sanción debe ser detallado (al menos 10 caracteres).");
+        }
+        if (gravedad == null || gravedad.trim().isEmpty()) {
+            throw new TorneoExcepcion("Debe indicar la gravedad de la sanción.");
+        }
+
+        try (Connection conn = ConexionBD.obtenerConexion()) {
+            conn.setAutoCommit(false);
+            try {
+                Jugador jug = jugadorDAO.buscarPorId(conn, idJugador);
+                if (jug == null) {
+                    throw new TorneoExcepcion("El jugador indicado no existe.");
+                }
+                Torneo torneo = resolverTorneoVigente(conn);
+                if (torneo == null) {
+                    throw new TorneoExcepcion("No hay ningún torneo disponible para asignar la sanción.");
+                }
+                Date inicio = new Date();
+                Calendar cal = Calendar.getInstance();
+                cal.setTime(inicio);
+                cal.add(Calendar.DAY_OF_MONTH, (int) (partidosSuspension * 7L));
+                Date fin = cal.getTime();
+
+                Sancion sancion = new Sancion(inicio, fin, motivo.trim(), gravedad.trim(), jug, null, torneo,
+                        "TORNEO", "ADMINISTRATIVA", partidosSuspension, 0, "PENDIENTE");
+                Long idSancion = sancionDAO.insertar(conn, sancion);
+                sancion.setId(idSancion);
+
+                conn.commit();
+                SistemaLogs.info(DisciplinaService.class, "Sanción administrativa registrada (ID " + idSancion
+                        + ") por el operador " + operador.getNombreUsuario());
+                return sancion;
+            } catch (Exception e) {
+                conn.rollback();
+                LOGGER.severe("Error al registrar la sanción administrativa, rollback: " + e.getMessage());
+                throw new TorneoExcepcion("Error al registrar la sanción administrativa: " + e.getMessage(), e);
+            }
+        } catch (SQLException e) {
+            throw new TorneoExcepcion("Error de conexión a la base de datos.", e);
+        }
+    }
+
+    private Torneo resolverTorneoVigente(Connection conn) throws SQLException {
+        List<Torneo> torneos = torneoDAO.buscarTodos(conn);
+        for (Torneo t : torneos) {
+            if (!"FINALIZADO".equalsIgnoreCase(t.getEstado())) {
+                return t;
+            }
+        }
+        return torneos.isEmpty() ? null : torneos.get(0);
+    }
+
     public void anularSancion(Long idSancion, String motivoAnulacion) throws TorneoExcepcion {
         anularSancion(idSancion, motivoAnulacion, null);
     }
 
     public void anularSancion(Long idSancion, String motivoAnulacion, Usuario operador) throws TorneoExcepcion {
-        if (operador != null) {
-            TiposDatos.Rol rol = operador.getRol();
-            if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR) {
-                throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para anular sanciones.");
-            }
+        if (operador == null) {
+            throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para anular sanciones.");
+        }
+        TiposDatos.Rol rol = operador.getRol();
+        if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR) {
+            throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para anular sanciones.");
         }
         if (motivoAnulacion == null || motivoAnulacion.trim().isEmpty()) {
             throw new TorneoExcepcion("Debe justificar el motivo de la anulación de la sanción.");

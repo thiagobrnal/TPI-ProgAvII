@@ -60,10 +60,31 @@ public class CierrePartidoTransaccionalIT {
         return UUID.randomUUID().toString().substring(0, 8);
     }
 
+    /**
+     * Crea un usuario autenticado con el rol exigido por la operación protegida,
+     * persistido en la base de tests y con su id asignado, para poder invocarla
+     * por la vía autorizada (fail-closed) de la capa de servicios.
+     */
+    private Usuario operadorConRol(TiposDatos.Rol rol) throws Exception {
+        String username = "op_" + sufijo() + "_" + rol.name().toLowerCase();
+        Usuario u = new Usuario(username, "ClaveSegura123!", username + "@test.local", "Operador", "Prueba", rol);
+        int idRol = 1;
+        if (rol == TiposDatos.Rol.ORGANIZADOR) idRol = 2;
+        else if (rol == TiposDatos.Rol.ARBITRO) idRol = 3;
+        else if (rol == TiposDatos.Rol.CAPITAN) idRol = 4;
+        else if (rol == TiposDatos.Rol.PUBLICO) idRol = 5;
+        Long id = usuarioDAO.insertar(u, AuthService.hashearBCrypt("ClaveSegura123!"), idRol);
+        u.setId(id);
+        return u;
+    }
+
     @Test
     @DisplayName("IT-CIERRE-01: Protocolo de cierre de acta de partido en 11 pasos atómicos")
     void testCierreActaPartido11PasosAtomics() throws Exception {
         String s = sufijo();
+
+        // Operador autenticado (ADMINISTRADOR) habilitado para programar y cerrar actas
+        Usuario admin = operadorConRol(TiposDatos.Rol.ADMINISTRADOR);
 
         // 1. Torneo y Fase
         Torneo torneo = new Torneo("Torneo Cierre " + s, "LIGA", 8, new Date());
@@ -102,7 +123,7 @@ public class CierrePartidoTransaccionalIT {
         Long idJVisExp = jugadorDAO.insertar(jVisExpulsado, idEqVis);
 
         // 4. Programar partido
-        Partido partido = partidoService.programarPartido(idFase, idEqLocal, idEqVis, idCancha, idArbitro, new Date(), 90);
+        Partido partido = partidoService.programarPartido(idFase, idEqLocal, idEqVis, idCancha, idArbitro, new Date(), 90, admin);
         Long idPartido = partido.getIdPartido();
         assertNotNull(idPartido);
 
@@ -119,7 +140,7 @@ public class CierrePartidoTransaccionalIT {
         // 6. Ejecutar PROTOCOLO ATÓMICO DE CIERRE DE ACTA
         Date finReal = new Date();
         assertDoesNotThrow(() -> {
-            partidoService.cerrarActaPartido(idPartido, finReal, null);
+            partidoService.cerrarActaPartido(idPartido, finReal, null, admin);
         });
 
         // 7. Verificaciones de los 11 pasos atómicos:
@@ -149,7 +170,7 @@ public class CierrePartidoTransaccionalIT {
 
             // Verificar rechazo si se intenta volver a cerrar (idempotencia y protección de estado)
             assertThrows(TorneoExcepcion.class, () -> {
-                partidoService.cerrarActaPartido(idPartido, new Date(), null);
+                partidoService.cerrarActaPartido(idPartido, new Date(), null, admin);
             });
         }
     }
@@ -158,6 +179,9 @@ public class CierrePartidoTransaccionalIT {
     @DisplayName("IT-VARIANTE-A: Reglas de acumulación de amarillas y extinción por doble amarilla")
     void testVarianteAAcumulacionAmarillas() throws Exception {
         String s = sufijo();
+
+        // Operador autenticado (ADMINISTRADOR) habilitado para programar y cerrar actas
+        Usuario admin = operadorConRol(TiposDatos.Rol.ADMINISTRADOR);
 
         // Crear Torneo y Fase 1 (limpia_amarillas = false)
         Torneo torneo = new Torneo("Torneo VarA " + s, "LIGA", 8, new Date());
@@ -186,7 +210,7 @@ public class CierrePartidoTransaccionalIT {
 
         // CASO 1: Jugador recibe doble amarilla en el mismo partido -> Expulsado por DOBLE_AMARILLA
         // Según Variante A: Esas 2 amarillas NO deben sumarse a su cómputo de acumulación general
-        Partido p1 = partidoService.programarPartido(idFase1, idEq1, idEq2, idCancha, null, new Date(), 90);
+        Partido p1 = partidoService.programarPartido(idFase1, idEq1, idEq2, idCancha, null, new Date(), 90, admin);
         Long idP1 = p1.getIdPartido();
 
         // Registrar 2 amarillas y la consecuente roja por doble amarilla
@@ -197,7 +221,7 @@ public class CierrePartidoTransaccionalIT {
         // También registrar amarilla para el acumulador
         partidoService.registrarIncidencia(idP1, idJAcum, 30, TiposDatos.TipoAccion.TARJETA_AMARILLA, null, "Amonestación");
 
-        partidoService.cerrarActaPartido(idP1, new Date(), null);
+        partidoService.cerrarActaPartido(idP1, new Date(), null, admin);
 
         try (Connection conn = ConexionBD.obtenerConexionTest()) {
             // Sanción por doble amarilla debe estar generada (1 fecha, ACTIVA)
@@ -219,9 +243,9 @@ public class CierrePartidoTransaccionalIT {
 
         // CASO 2: Jugador acumula 5 amarillas en 5 partidos distintos y recibe sanción automática
         for (int i = 2; i <= 5; i++) {
-            Partido pSig = partidoService.programarPartido(idFase1, idEq1, idEq2, idCancha, null, new Date(), 90);
+            Partido pSig = partidoService.programarPartido(idFase1, idEq1, idEq2, idCancha, null, new Date(), 90, admin);
             partidoService.registrarIncidencia(pSig.getIdPartido(), idJAcum, 40, TiposDatos.TipoAccion.TARJETA_AMARILLA, null, "Amonestación fecha " + i);
-            partidoService.cerrarActaPartido(pSig.getIdPartido(), new Date(), null);
+            partidoService.cerrarActaPartido(pSig.getIdPartido(), new Date(), null, admin);
         }
 
         try (Connection conn = ConexionBD.obtenerConexionTest()) {
@@ -248,6 +272,9 @@ public class CierrePartidoTransaccionalIT {
     void testReclamoPlazo72HorasYApelacion5Dias() throws Exception {
         String s = sufijo();
 
+        // Operador autenticado (ADMINISTRADOR) habilitado para programar, cerrar actas y resolver expedientes
+        Usuario admin = operadorConRol(TiposDatos.Rol.ADMINISTRADOR);
+
         Torneo torneo = new Torneo("Torneo Reclamos " + s, "LIGA", 8, new Date());
         Long idTorneo = torneoDAO.insertar(torneo);
         Fase fase = new Fase("Fase Clasificatoria", 1, false);
@@ -265,16 +292,16 @@ public class CierrePartidoTransaccionalIT {
         Equipo eq2 = new Equipo("Boca " + s, catLibre, "Azul y Oro", cancha, cap);
         Long idEq2 = equipoDAO.insertar(eq2, idCap);
 
-        Partido p = partidoService.programarPartido(idFase, idEq1, idEq2, idCancha, null, new Date(), 90);
+        Partido p = partidoService.programarPartido(idFase, idEq1, idEq2, idCancha, null, new Date(), 90, admin);
         Long idPartido = p.getIdPartido();
 
         // Finalizar el partido ahora
         Date finReal = new Date();
-        partidoService.cerrarActaPartido(idPartido, finReal, null);
+        partidoService.cerrarActaPartido(idPartido, finReal, null, admin);
 
         // 1. Presentar reclamo sobre el partido dentro de las 72 horas corridas (CU-13)
         Reclamo reclamoPartido = reclamoService.presentarReclamoPartido(
-            idPartido, idCap, "Reclamo formal por inclusión indebida de jugador rival."
+            idPartido, idCap, "Reclamo formal por inclusión indebida de jugador rival.", cap
         );
         assertNotNull(reclamoPartido.getId());
         assertEquals("PENDIENTE", reclamoPartido.getEstado());
@@ -292,7 +319,7 @@ public class CierrePartidoTransaccionalIT {
         Long idSancion = sancionDAO.insertar(sancion);
 
         Reclamo apelacion = reclamoService.apelarSancion(
-            idSancion, idCap, "Apelación fundada: las imágenes de video demuestran que no hubo agresión física."
+            idSancion, idCap, "Apelación fundada: las imágenes de video demuestran que no hubo agresión física.", cap
         );
         assertNotNull(apelacion.getId());
         assertEquals("PENDIENTE", apelacion.getEstado());
@@ -302,7 +329,8 @@ public class CierrePartidoTransaccionalIT {
         reclamoService.resolverExpediente(
             apelacion.getId(),
             "A FAVOR",
-            "El tribunal analizó el video aportado y concluye que existió error de identidad arbitral."
+            "El tribunal analizó el video aportado y concluye que existió error de identidad arbitral.",
+            admin
         );
 
         try (Connection conn = ConexionBD.obtenerConexionTest()) {
@@ -324,6 +352,10 @@ public class CierrePartidoTransaccionalIT {
     @DisplayName("CP-04: Exigencia estricta de fecha_hora_fin_real y control de autorización de operador")
     void testObligatoriedadFechaFinYAutorizacionOperador() throws Exception {
         String s = sufijo();
+
+        // Operador autenticado (ADMINISTRADOR) habilitado para programar y cerrar actas
+        Usuario admin = operadorConRol(TiposDatos.Rol.ADMINISTRADOR);
+
         Torneo torneo = new Torneo("Torneo Oblig " + s, "LIGA", 8, new Date());
         Long idTorneo = torneoDAO.insertar(torneo);
         Fase fase = new Fase("Fase Oblig", 1, false);
@@ -341,12 +373,12 @@ public class CierrePartidoTransaccionalIT {
         Long idEq2 = equipoDAO.insertar(eq2, idCap);
 
         Date fechaInicio = new Date(System.currentTimeMillis() - 7200000L); // 2 horas en el pasado
-        Partido p = partidoService.programarPartido(idFase, idEq1, idEq2, idCancha, null, fechaInicio, 90);
+        Partido p = partidoService.programarPartido(idFase, idEq1, idEq2, idCancha, null, fechaInicio, 90, admin);
         Long idPartido = p.getIdPartido();
 
         // 1. Intentar cerrar acta con fechaHoraFinReal == null debe ser rechazado explícitamente (sin fallback silencioso)
         TorneoExcepcion exFechaNula = assertThrows(TorneoExcepcion.class, () -> {
-            partidoService.cerrarActaPartido(idPartido, null, null);
+            partidoService.cerrarActaPartido(idPartido, null, null, admin);
         });
         assertTrue(exFechaNula.getMessage().contains("fecha y hora real de finalización es obligatoria"));
 
@@ -357,7 +389,8 @@ public class CierrePartidoTransaccionalIT {
         assertTrue(exCapitan.getMessage().contains("no tiene permisos para cerrar actas"));
 
         // 3. Operador ARBITRO u ORGANIZADOR puede cerrar el acta exitosamente
-        Usuario arbitro = new Usuario("arb_ob_" + s, "1234", "arb_ob_" + s + "@test.com", "Arbitro", "Oficial", TiposDatos.Rol.ARBITRO);
+        Arbitro arbitro = new Arbitro("arb_ob_" + s, "1234", "arb_ob_" + s + "@test.com", "Arbitro", "Oficial", "Nacional", "12345678");
+        arbitroDAO.insertar(arbitro, AuthService.hashearSha256("1234"));
         partidoService.cerrarActaPartido(idPartido, new Date(fechaInicio.getTime() + 5400000L), null, arbitro);
 
         try (Connection conn = ConexionBD.obtenerConexionTest()) {
@@ -371,6 +404,10 @@ public class CierrePartidoTransaccionalIT {
     @DisplayName("Cierre Partido: Encuentro programado a las 20:00, iniciado a las 19:45 y finalizado a las 20:55 se acepta exitosamente")
     void testCierrePartidoHorarioProgramadoVsFinalizacionReal() throws Exception {
         String s = UUID.randomUUID().toString().substring(0, 8);
+
+        // Operador autenticado (ADMINISTRADOR) habilitado para programar encuentros
+        Usuario admin = operadorConRol(TiposDatos.Rol.ADMINISTRADOR);
+
         Torneo t = new Torneo("Torneo Horarios " + s, "Liga", 8, new Date());
         Long idTorneo = torneoDAO.insertar(t);
         Fase fase = new Fase("Fase Horarios", 1, false);
@@ -397,7 +434,7 @@ public class CierrePartidoTransaccionalIT {
         cal.set(2026, java.util.Calendar.NOVEMBER, 1, 20, 0, 0);
         Date horarioProgramado2000 = cal.getTime();
 
-        Partido p = partidoService.programarPartido(idFase, idEq1, idEq2, idCancha, idArb, horarioProgramado2000, 90);
+        Partido p = partidoService.programarPartido(idFase, idEq1, idEq2, idCancha, idArb, horarioProgramado2000, 90, admin);
         Long idPartido = p.getIdPartido();
 
         // El partido inició efectivamente a las 19:45 y finalizó a las 20:55
@@ -415,7 +452,7 @@ public class CierrePartidoTransaccionalIT {
         }
 
         // Caso límite adicional: Partido programado a las 20:00 pero finalizado a las 19:55 (partido suspendido/reducido anticipadamente)
-        Partido pAnticipado = partidoService.programarPartido(idFase, idEq1, idEq2, idCancha, idArb, horarioProgramado2000, 90);
+        Partido pAnticipado = partidoService.programarPartido(idFase, idEq1, idEq2, idCancha, idArb, horarioProgramado2000, 90, admin);
         cal.set(2026, java.util.Calendar.NOVEMBER, 1, 19, 55, 0);
         Date finAnticipado1955 = cal.getTime();
 
@@ -434,6 +471,10 @@ public class CierrePartidoTransaccionalIT {
     @DisplayName("Cierre Partido: Rechazar fecha y hora real de finalización futura respecto al momento actual (ADR-17 / H-04)")
     void testCierrePartidoRechazaFechaFinalizacionFutura() throws Exception {
         String s = UUID.randomUUID().toString().substring(0, 8);
+
+        // Operador autenticado (ADMINISTRADOR) habilitado para programar y cerrar actas
+        Usuario admin = operadorConRol(TiposDatos.Rol.ADMINISTRADOR);
+
         Torneo t = new Torneo("Torneo Futuro " + s, "Liga", 8, new Date());
         Long idTorneo = torneoDAO.insertar(t);
         Fase fase = new Fase("Fase Futuro", 1, false);
@@ -451,12 +492,12 @@ public class CierrePartidoTransaccionalIT {
         Long idEq2 = equipoDAO.insertar(eq2, idCap);
 
         Date fechaInicio = new Date(System.currentTimeMillis() - 7200000L);
-        Partido p = partidoService.programarPartido(idFase, idEq1, idEq2, idCancha, null, fechaInicio, 90);
+        Partido p = partidoService.programarPartido(idFase, idEq1, idEq2, idCancha, null, fechaInicio, 90, admin);
 
         // Intentar cerrar con fecha futura (1 hora en el futuro) debe arrojar TorneoExcepcion
         Date finFuturo = new Date(System.currentTimeMillis() + 3600000L);
         TorneoExcepcion exFuturo = assertThrows(TorneoExcepcion.class, () -> {
-            partidoService.cerrarActaPartido(p.getIdPartido(), finFuturo, null);
+            partidoService.cerrarActaPartido(p.getIdPartido(), finFuturo, null, admin);
         });
         assertTrue(exFuturo.getMessage().contains("no puede ser posterior al momento actual"));
     }
@@ -465,6 +506,10 @@ public class CierrePartidoTransaccionalIT {
     @DisplayName("Seguridad: Un árbitro no puede cerrar un partido si no es el árbitro oficial designado")
     void testCierrePartidoAutorizacionArbitroDesignado() throws Exception {
         String s = UUID.randomUUID().toString().substring(0, 8);
+
+        // Operador autenticado (ADMINISTRADOR) habilitado para programar encuentros
+        Usuario admin = operadorConRol(TiposDatos.Rol.ADMINISTRADOR);
+
         Torneo t = new Torneo("Torneo ArbSec " + s, "Liga", 8, new Date());
         Long idTorneo = torneoDAO.insertar(t);
         Fase fase = new Fase("Fase ArbSec", 1, false);
@@ -489,7 +534,7 @@ public class CierrePartidoTransaccionalIT {
         Long idArbAje = arbitroDAO.insertar(arbAjeno, AuthService.hashearSha256("1234"));
         arbAjeno.setId(idArbAje);
 
-        Partido p = partidoService.programarPartido(idFase, idEq1, idEq2, idCancha, idArbDes, new Date(), 90);
+        Partido p = partidoService.programarPartido(idFase, idEq1, idEq2, idCancha, idArbDes, new Date(), 90, admin);
 
         // Árbitro ajeno intenta cerrar el acta: debe ser rechazado
         TorneoExcepcion ex = assertThrows(TorneoExcepcion.class, () -> {
@@ -509,6 +554,10 @@ public class CierrePartidoTransaccionalIT {
     @DisplayName("Cierre Partido: Preservación de estados LESIONADO e INHABILITADO durante protocolo atómico (ADR-13 / H-05)")
     void testCierrePartidoPreservaEstadoJugadorNoActivo() throws Exception {
         String s = UUID.randomUUID().toString().substring(0, 8);
+
+        // Operador autenticado (ADMINISTRADOR) habilitado para programar y cerrar actas
+        Usuario admin = operadorConRol(TiposDatos.Rol.ADMINISTRADOR);
+
         Torneo t = new Torneo("Torneo ADR13 Cierre " + s, "Liga", 8, new Date());
         Long idTorneo = torneoDAO.insertar(t);
         Fase fase = new Fase("Fase ADR13", 1, false);
@@ -542,7 +591,7 @@ public class CierrePartidoTransaccionalIT {
 
         // Programar partido en el pasado
         Date fechaInicio = new Date(System.currentTimeMillis() - 7200000L);
-        Partido p = partidoService.programarPartido(idFase, idEq1, idEq2, idCancha, null, fechaInicio, 90);
+        Partido p = partidoService.programarPartido(idFase, idEq1, idEq2, idCancha, null, fechaInicio, 90, admin);
         Long idPartido = p.getIdPartido();
 
         // Registrar incidencia de expulsión por roja directa sobre jugador lesionado
@@ -553,7 +602,7 @@ public class CierrePartidoTransaccionalIT {
 
         // Cerrar acta
         Date finReal = new Date(fechaInicio.getTime() + 5400000L);
-        partidoService.cerrarActaPartido(idPartido, finReal, null);
+        partidoService.cerrarActaPartido(idPartido, finReal, null, admin);
 
         // Verificaciones críticas de ADR-13 / H-05:
         try (Connection conn = ConexionBD.obtenerConexionTest()) {
@@ -574,8 +623,8 @@ public class CierrePartidoTransaccionalIT {
         }
 
         // Segundo partido: el equipo vuelve a jugar y se cumple la fecha de suspensión de doble amarilla
-        Partido p2 = partidoService.programarPartido(idFase, idEq1, idEq2, idCancha, null, new Date(System.currentTimeMillis() - 3600000L), 90);
-        partidoService.cerrarActaPartido(p2.getIdPartido(), new Date(System.currentTimeMillis() - 1800000L), null);
+        Partido p2 = partidoService.programarPartido(idFase, idEq1, idEq2, idCancha, null, new Date(System.currentTimeMillis() - 3600000L), 90, admin);
+        partidoService.cerrarActaPartido(p2.getIdPartido(), new Date(System.currentTimeMillis() - 1800000L), null, admin);
 
         // Al purgarse la sanción, el jugador inhabilitado NO debe volver a ACTIVO
         try (Connection conn = ConexionBD.obtenerConexionTest()) {

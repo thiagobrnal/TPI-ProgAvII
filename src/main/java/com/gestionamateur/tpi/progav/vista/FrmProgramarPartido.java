@@ -11,6 +11,7 @@ import com.gestionamateur.tpi.progav.modelo.TorneoExcepcion;
 import com.gestionamateur.tpi.progav.modelo.Usuario;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import javax.swing.JOptionPane;
@@ -38,7 +39,16 @@ public class FrmProgramarPartido extends javax.swing.JFrame {
         
         formatoFechaHora = new SimpleDateFormat("dd/MM/yyyy HH:mm");
         formatoFechaHora.setLenient(false);
-        
+
+        // Fecha por defecto: mañana a las 18:00 (un encuentro no se programa en el pasado).
+        Calendar fechaSugerida = Calendar.getInstance();
+        fechaSugerida.add(Calendar.DAY_OF_MONTH, 1);
+        fechaSugerida.set(Calendar.HOUR_OF_DAY, 18);
+        fechaSugerida.set(Calendar.MINUTE, 0);
+        fechaSugerida.set(Calendar.SECOND, 0);
+        fechaSugerida.set(Calendar.MILLISECOND, 0);
+        txtFechaHora.setText(formatoFechaHora.format(fechaSugerida.getTime()));
+
         cargarDatosCombos();
         actualizarVisorFixture();
     }
@@ -48,25 +58,9 @@ public class FrmProgramarPartido extends javax.swing.JFrame {
         cmbEquipoVisitante.removeAllItems();
         cmbCancha.removeAllItems();
 
+        // Solo se cargan equipos y sedes realmente registrados en la base de datos.
+        // No se crean datos ficticios desde la interfaz.
         List<Equipo> equipos = GestorEquipos.getEquiposRegistrados();
-        // Si aún no cargaste equipos manualmente en esta sesión, creamos 2 de base para poder probar directo
-        if (equipos.isEmpty()) {
-            List<Cancha> canchas = GestorCanchas.getCanchasRegistradas();
-            if (!canchas.isEmpty()) {
-                try {
-                    Categoria cat = new Categoria("Libre", "Masculino", 18, 45);
-                    Cancha sedeDefault = canchas.get(0);
-                    Usuario cap1 = new Usuario("cap_local", "123", "cap1@mail.com", "Lucas", "Gómez", TiposDatos.Rol.CAPITAN);
-                    Usuario cap2 = new Usuario("cap_vis", "123", "cap2@mail.com", "Mateo", "Silva", TiposDatos.Rol.CAPITAN);
-                    gestorEquipos.registrarEquipo("Los Halcones", cat, "Azul y Blanco", sedeDefault, cap1);
-                    gestorEquipos.registrarEquipo("Deportivo Sur", cat, "Rojo y Negro", sedeDefault, cap2);
-                    equipos = GestorEquipos.getEquiposRegistrados();
-                } catch (TorneoExcepcion ex) {
-                    // Ignorado en carga semilla
-                }
-            }
-        }
-
         for (Equipo e : equipos) {
             cmbEquipoLocal.addItem(e.getNombre());
             cmbEquipoVisitante.addItem(e.getNombre());
@@ -77,6 +71,11 @@ public class FrmProgramarPartido extends javax.swing.JFrame {
 
         for (Cancha c : GestorCanchas.getCanchasRegistradas()) {
             cmbCancha.addItem(c.getNombre());
+        }
+
+        if (equipos.size() < 2 || cmbCancha.getItemCount() == 0) {
+            btnProgramar.setEnabled(false);
+            lblSubtitulo.setText("Para programar un partido se necesitan al menos 2 equipos y 1 sede registrados.");
         }
     }
 

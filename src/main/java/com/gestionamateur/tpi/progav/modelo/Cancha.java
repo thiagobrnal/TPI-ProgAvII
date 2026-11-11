@@ -11,6 +11,7 @@ public class Cancha {
     private String nombre;
     private String direccion;
     private String tipoSuperficie;
+    private boolean activa = true;
 
     // Constructor vacío (obligatorio para JPA en la Fase 2)
     public Cancha() {}
@@ -49,7 +50,10 @@ public class Cancha {
         this.direccion = direccion; 
     }
     
-    public String getTipoSuperficie() { return tipoSuperficie; } 
+    public String getTipoSuperficie() { return tipoSuperficie; }
+
+    public boolean isActiva() { return activa; }
+    public void setActiva(boolean activa) { this.activa = activa; }
     
     public void setTipoSuperficie(String tipoSuperficie) throws TorneoExcepcion { 
         if (tipoSuperficie == null || tipoSuperficie.trim().isEmpty()) {

@@ -127,6 +127,28 @@ public class PartidoDAO {
         return lista;
     }
 
+    /**
+     * CU 3.1: Lista los partidos aun no finalizados (PROGRAMADO / POSTERGADO / SUSPENDIDO)
+     * para evaluar la disponibilidad real de los arbitros contra la base de datos y no
+     * contra una lista en memoria.
+     */
+    public List<Partido> buscarPendientesDeFinalizacion() throws SQLException {
+        try (Connection conn = ConexionBD.obtenerConexion()) {
+            String sql = "SELECT id_partido, id_fase, id_cancha, id_arbitro, id_motivo_suspension, "
+                       + "fecha_hora, fecha_hora_finalizacion_real, duracion_partido_minutos, estado "
+                       + "FROM partidos WHERE estado <> 'FINALIZADO' ORDER BY fecha_hora";
+            List<Partido> lista = new ArrayList<>();
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        lista.add(mapearPartido(conn, rs));
+                    }
+                }
+            }
+            return lista;
+        }
+    }
+
     public List<Partido> buscarPorTorneo(Connection conn, Long idTorneo) throws SQLException {
         String sql = "SELECT p.id_partido, p.id_fase, p.id_cancha, p.id_arbitro, p.id_motivo_suspension, "
                    + "p.fecha_hora, p.fecha_hora_finalizacion_real, p.duracion_partido_minutos, p.estado "

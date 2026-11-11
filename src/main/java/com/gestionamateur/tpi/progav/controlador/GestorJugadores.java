@@ -27,8 +27,16 @@ public class GestorJugadores {
     }
 
     public String iniciarAltaJugador(String nombre, int dni, Date fechaNacimiento, String posicion, Long idEquipo, Usuario operador) {
+        return iniciarAltaJugador(nombre, dni, fechaNacimiento, posicion, idEquipo,
+                com.gestionamateur.tpi.progav.modelo.TiposDatos.EstadoJugador.ACTIVO, operador);
+    }
+
+    /** CU-02: alta de jugador con equipo y estado inicial. */
+    public String iniciarAltaJugador(String nombre, int dni, Date fechaNacimiento, String posicion, Long idEquipo,
+                                     com.gestionamateur.tpi.progav.modelo.TiposDatos.EstadoJugador estado,
+                                     Usuario operador) {
         try {
-            Jugador nuevo = jugadorService.registrarJugador(nombre, dni, fechaNacimiento, posicion, idEquipo, operador);
+            Jugador nuevo = jugadorService.registrarJugador(nombre, dni, fechaNacimiento, posicion, idEquipo, estado, operador);
             dbJugadores.add(nuevo);
             return "ÉXITO: Jugador habilitado e inscripto en la base de datos (ID: " + nuevo.getId() + "). Listo para imprimir credencial.";
         } catch (TorneoExcepcion te) {

@@ -65,16 +65,17 @@ public class PartidoService {
 
     public Partido programarPartido(Long idFase, Long idLocal, Long idVisitante, Long idCancha,
                                      Long idArbitro, Date fechaHora, int duracionMinutos, Usuario operador) throws TorneoExcepcion {
-        if (operador != null) {
-            TiposDatos.Rol rol = operador.getRol();
-            if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR) {
-                throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para programar encuentros.");
-            }
+        if (operador == null) {
+            throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para programar encuentros.");
+        }
+        TiposDatos.Rol rol = operador.getRol();
+        if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR) {
+            throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para programar encuentros.");
         }
         return programarPartido(idFase, idLocal, idVisitante, idCancha, idArbitro, fechaHora, duracionMinutos);
     }
 
-    public Partido programarPartido(Long idFase, Long idLocal, Long idVisitante, Long idCancha,
+    private Partido programarPartido(Long idFase, Long idLocal, Long idVisitante, Long idCancha,
                                      Long idArbitro, Date fechaHora, int duracionMinutos) throws TorneoExcepcion {
         if (idLocal.equals(idVisitante)) {
             throw new TorneoExcepcion("Un partido debe disputarse entre dos equipos distintos.");
@@ -227,11 +228,12 @@ public class PartidoService {
     }
 
     public void cerrarActaPartido(Long idPartido, Date fechaHoraFinReal, List<Cronologia> incidenciasFinales, Usuario operador) throws TorneoExcepcion {
-        if (operador != null) {
-            TiposDatos.Rol rol = operador.getRol();
-            if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR && rol != TiposDatos.Rol.ARBITRO) {
-                throw new TorneoExcepcion("Acceso denegado: el rol " + rol + " no tiene permisos para cerrar actas de partido.");
-            }
+        if (operador == null) {
+            throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para cerrar actas de partido.");
+        }
+        TiposDatos.Rol rol = operador.getRol();
+        if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR && rol != TiposDatos.Rol.ARBITRO) {
+            throw new TorneoExcepcion("Acceso denegado: el rol " + rol + " no tiene permisos para cerrar actas de partido.");
         }
         cerrarActaPartidoInterno(idPartido, fechaHoraFinReal, incidenciasFinales, null, null, operador);
     }
@@ -240,11 +242,12 @@ public class PartidoService {
         if (golesLocalDeclarados < 0 || golesVisitanteDeclarados < 0) {
             throw new TorneoExcepcion("La cantidad de goles no puede ser negativa.");
         }
-        if (operador != null) {
-            TiposDatos.Rol rol = operador.getRol();
-            if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR && rol != TiposDatos.Rol.ARBITRO) {
-                throw new TorneoExcepcion("Acceso denegado: el rol " + rol + " no tiene permisos para cerrar actas de partido.");
-            }
+        if (operador == null) {
+            throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para cerrar actas de partido.");
+        }
+        TiposDatos.Rol rol = operador.getRol();
+        if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR && rol != TiposDatos.Rol.ARBITRO) {
+            throw new TorneoExcepcion("Acceso denegado: el rol " + rol + " no tiene permisos para cerrar actas de partido.");
         }
         cerrarActaPartidoInterno(idPartido, fechaHoraFinReal, null, golesLocalDeclarados, golesVisitanteDeclarados, operador);
     }
@@ -253,8 +256,8 @@ public class PartidoService {
      * PROTOCOLO TRANSACCIONAL DE CIERRE DE ACTA DE PARTIDO EN 11 PASOS ATÓMICOS.
      * Garantiza atomicidad, consistencia, bloqueo pesimista, acumulación Variante A e idempotencia de sanciones.
      */
-    public void cerrarActaPartido(Long idPartido, Date fechaHoraFinReal, List<Cronologia> incidenciasFinales) throws TorneoExcepcion {
-        cerrarActaPartidoInterno(idPartido, fechaHoraFinReal, incidenciasFinales, null, null, null);
+    private void cerrarActaPartido(Long idPartido, Date fechaHoraFinReal, List<Cronologia> incidenciasFinales) throws TorneoExcepcion {
+        throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para cerrar actas de partido.");
     }
 
     private void cerrarActaPartidoInterno(Long idPartido, Date fechaHoraFinReal, List<Cronologia> incidenciasFinales,

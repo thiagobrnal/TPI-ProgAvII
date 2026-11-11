@@ -51,6 +51,43 @@ public class EquipoDAO {
         throw new SQLException("Error al insertar equipo: no se obtuvo ID autogenerado.");
     }
 
+    /** CU-01: verifica si ya existe un equipo con el mismo nombre en la misma categoria. */
+    public boolean existePorNombreYCategoria(Connection conn, String nombre, Long idCategoria, Long idEquipoExcluido)
+            throws SQLException {
+        String sql = "SELECT COUNT(*) FROM equipos WHERE lower(nombre) = lower(?) AND id_categoria = ?"
+                   + (idEquipoExcluido != null ? " AND id_equipo <> ?" : "");
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, nombre);
+            ps.setLong(2, idCategoria);
+            if (idEquipoExcluido != null) {
+                ps.setLong(3, idEquipoExcluido);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() && rs.getInt(1) > 0;
+            }
+        }
+    }
+
+    /** CU-01: actualiza los datos de un equipo ya registrado. */
+    public void actualizar(Connection conn, Equipo equipo, Long idCapitan) throws SQLException {
+        String sql = "UPDATE equipos SET nombre = ?, alias = ?, id_categoria = ?, color_camiseta = ?, "
+                   + "id_sede_habitual = ?, id_capitan = ? WHERE id_equipo = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, equipo.getNombre());
+            ps.setString(2, equipo.getAlias());
+            ps.setLong(3, equipo.getCategoria().getId());
+            ps.setString(4, equipo.getColorCamiseta());
+            if (equipo.getSedeHabitual() != null && equipo.getSedeHabitual().getIdCancha() != null) {
+                ps.setLong(5, equipo.getSedeHabitual().getIdCancha());
+            } else {
+                ps.setNull(5, Types.BIGINT);
+            }
+            ps.setLong(6, idCapitan != null ? idCapitan : equipo.getCapitan().getId());
+            ps.setLong(7, equipo.getIdEquipo());
+            ps.executeUpdate();
+        }
+    }
+
     public Equipo buscarPorId(Long idEquipo) throws SQLException {
         try (Connection conn = ConexionBD.obtenerConexion()) {
             return buscarPorId(conn, idEquipo);

@@ -1,10 +1,14 @@
 package com.gestionamateur.tpi.progav.servicio;
 
 import com.gestionamateur.tpi.progav.dao.CategoriaDAO;
+import com.gestionamateur.tpi.progav.dao.TorneoDAO;
 import com.gestionamateur.tpi.progav.dao.ConfiguracionDAO;
+import com.gestionamateur.tpi.progav.dao.TorneoDAO;
 import com.gestionamateur.tpi.progav.dao.ConexionBD;
 import com.gestionamateur.tpi.progav.dao.EquipoDAO;
+import com.gestionamateur.tpi.progav.dao.TorneoDAO;
 import com.gestionamateur.tpi.progav.dao.JugadorDAO;
+import com.gestionamateur.tpi.progav.dao.TorneoDAO;
 import com.gestionamateur.tpi.progav.modelo.Categoria;
 import com.gestionamateur.tpi.progav.modelo.Equipo;
 import com.gestionamateur.tpi.progav.modelo.Jugador;
@@ -44,15 +48,25 @@ public class JugadorService {
     }
 
     public Jugador registrarJugador(String nombre, int dni, Date fechaNacimiento, String posicion, Long idEquipo) throws TorneoExcepcion {
-        return registrarJugador(nombre, dni, fechaNacimiento, posicion, idEquipo, null);
+        return registrarJugador(nombre, dni, fechaNacimiento, posicion, idEquipo, TiposDatos.EstadoJugador.ACTIVO, null);
     }
 
     public Jugador registrarJugador(String nombre, int dni, Date fechaNacimiento, String posicion, Long idEquipo, Usuario operador) throws TorneoExcepcion {
-        if (operador != null) {
-            TiposDatos.Rol rol = operador.getRol();
-            if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR && rol != TiposDatos.Rol.CAPITAN) {
-                throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para registrar jugadores.");
-            }
+        return registrarJugador(nombre, dni, fechaNacimiento, posicion, idEquipo, TiposDatos.EstadoJugador.ACTIVO, operador);
+    }
+
+    /**
+     * CU-02: alta de jugador. El estado inicial (activo, suspendido, lesionado) es parte
+     * de los datos que exige la especificacion.
+     */
+    public Jugador registrarJugador(String nombre, int dni, Date fechaNacimiento, String posicion, Long idEquipo,
+                                     TiposDatos.EstadoJugador estado, Usuario operador) throws TorneoExcepcion {
+        if (operador == null) {
+            throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para registrar jugadores.");
+        }
+        TiposDatos.Rol rol = operador.getRol();
+        if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR && rol != TiposDatos.Rol.CAPITAN) {
+            throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para registrar jugadores.");
         }
         try (Connection conn = ConexionBD.obtenerConexion()) {
             if (operador != null && operador.getRol() == TiposDatos.Rol.CAPITAN) {
@@ -80,7 +94,26 @@ public class JugadorService {
                 throw new TorneoExcepcion("El jugador tiene " + edad + " años. La edad mínima reglamentaria general es de " + edadMinimaGeneral + " años.");
             }
 
-            Jugador nuevo = new Jugador(idEquipo, nombre, dni, fechaNacimiento, posicion, TiposDatos.EstadoJugador.ACTIVO);
+            Jugador nuevo = new Jugador(idEquipo, nombre, dni, fechaNacimiento, posicion,
+                    estado == null ? TiposDatos.EstadoJugador.ACTIVO : estado);
+
+            // CU-02.1: control de inscripcion. Si el jugador se incorpora a un equipo, se
+            // valida la elegibilidad por edad frente a la categoria de ese equipo.
+            if (idEquipo != null) {
+                Equipo equipo = equipoDAO.buscarPorId(conn, idEquipo);
+                if (equipo == null) {
+                    throw new TorneoExcepcion("El equipo seleccionado no existe.");
+                }
+                if (equipo.getCategoria() != null) {
+                    Date inicioTorneo = resolverFechaInicioTorneo(conn);
+                    if (inicioTorneo != null
+                            && !verificarElegibilidadCategoria(nuevo, equipo.getCategoria(), inicioTorneo)) {
+                        throw new TorneoExcepcion("El jugador no cumple la edad mínima de la categoría "
+                                + equipo.getCategoria().getNombre() + " al inicio del torneo.");
+                    }
+                }
+            }
+
             Long id = jugadorDAO.insertar(conn, nuevo, idEquipo);
             nuevo.setId(id);
             SistemaLogs.info(JugadorService.class, "Jugador registrado exitosamente: " + nombre + " (DNI: " + dni + ", ID: " + id + ")");
@@ -88,6 +121,17 @@ public class JugadorService {
         } catch (SQLException e) {
             throw new TorneoExcepcion("Error al persistir el jugador: " + e.getMessage(), e);
         }
+    }
+
+    /** Fecha de inicio del torneo vigente, usada como referencia para la elegibilidad. */
+    private Date resolverFechaInicioTorneo(Connection conn) throws SQLException {
+        List<com.gestionamateur.tpi.progav.modelo.Torneo> torneos = new TorneoDAO().buscarTodos(conn);
+        for (com.gestionamateur.tpi.progav.modelo.Torneo t : torneos) {
+            if (!"FINALIZADO".equalsIgnoreCase(t.getEstado())) {
+                return t.getFechaInicio();
+            }
+        }
+        return torneos.isEmpty() ? null : torneos.get(0).getFechaInicio();
     }
 
     public boolean verificarElegibilidadCategoria(Jugador jugador, Categoria categoria, Date fechaInicioTorneo) throws TorneoExcepcion {

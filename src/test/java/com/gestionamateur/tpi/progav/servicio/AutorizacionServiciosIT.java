@@ -164,7 +164,7 @@ public class AutorizacionServiciosIT {
         Jugador jug = jugadorService.registrarJugador("Jug Sancionado " + s, 33000000 + (int)(Math.random()*900000),
                 new Date(98, 1, 1), "Mediocampista", eq.getIdEquipo(), admin);
 
-        Partido p = partidoService.programarPartido(f.getIdFase(), eq.getIdEquipo(), eqRival.getIdEquipo(), c.getIdCancha(), arb.getId(), new Date(), 90);
+        Partido p = partidoService.programarPartido(f.getIdFase(), eq.getIdEquipo(), eqRival.getIdEquipo(), c.getIdCancha(), arb.getId(), new Date(), 90, admin);
 
         Sancion san = new Sancion(new Date(), null, "Informe arbitral", "MEDIA", jug, p, t, "TORNEO", "ROJA_DIRECTA", 2, 0, "PENDIENTE");
         Long idSan = sancionDAO.insertar(san);
@@ -409,7 +409,7 @@ public class AutorizacionServiciosIT {
             jugadorDAO.actualizarEstado(conn, jugLesionado.getId(), "LESIONADO");
         }
 
-        Partido p = partidoService.programarPartido(f.getIdFase(), eq.getIdEquipo(), eqRival.getIdEquipo(), c.getIdCancha(), arb.getId(), new Date(System.currentTimeMillis() - 7200000L), 90);
+        Partido p = partidoService.programarPartido(f.getIdFase(), eq.getIdEquipo(), eqRival.getIdEquipo(), c.getIdCancha(), arb.getId(), new Date(System.currentTimeMillis() - 7200000L), 90, admin);
 
         Sancion san = new Sancion(new Date(), null, "Informe arbitral por agresión previa", "MEDIA", jugLesionado, p, t, "TORNEO", "ADMINISTRATIVA", 2, 0, "PENDIENTE");
         Long idSan = sancionDAO.insertar(san);

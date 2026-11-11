@@ -68,10 +68,31 @@ public class EndurecimientoInf05IT {
         return 40000000 + (int)(Math.random() * 8000000);
     }
 
+    /**
+     * Crea un usuario autenticado con el rol exigido por la operación protegida,
+     * persistido en la base de tests y con su id asignado, para poder invocarla
+     * por la vía autorizada (fail-closed) de la capa de servicios.
+     */
+    private Usuario operadorConRol(TiposDatos.Rol rol) throws Exception {
+        String username = "op_" + sufijo() + "_" + rol.name().toLowerCase();
+        Usuario u = new Usuario(username, "ClaveSegura123!", username + "@test.local", "Operador", "Prueba", rol);
+        int idRol = 1;
+        if (rol == TiposDatos.Rol.ORGANIZADOR) idRol = 2;
+        else if (rol == TiposDatos.Rol.ARBITRO) idRol = 3;
+        else if (rol == TiposDatos.Rol.CAPITAN) idRol = 4;
+        else if (rol == TiposDatos.Rol.PUBLICO) idRol = 5;
+        Long id = usuarioDAO.insertar(u, AuthService.hashearBCrypt("ClaveSegura123!"), idRol);
+        u.setId(id);
+        return u;
+    }
+
     @Test
     @DisplayName("H-01 / CU-14: Validación de ventana perentoria de apelación calculada desde fecha_publicacion_formal")
     void testValidacionVentanaApelacionCU14() throws Exception {
         String s = sufijo();
+
+        // Operador autenticado (ADMINISTRADOR) habilitado para programar y cerrar actas
+        Usuario admin = operadorConRol(TiposDatos.Rol.ADMINISTRADOR);
 
         Torneo torneo = new Torneo("Torneo CU14 " + s, "LIGA", 8, new Date());
         Long idTorneo = torneoDAO.insertar(torneo);
@@ -90,8 +111,8 @@ public class EndurecimientoInf05IT {
         Equipo eq2 = new Equipo("Eq2 CU14 " + s, catLibre, "Azul", cancha, cap);
         Long idEq2 = equipoDAO.insertar(eq2, idCap);
 
-        Partido p = partidoService.programarPartido(idFase, idEq1, idEq2, idCancha, null, new Date(), 90);
-        partidoService.cerrarActaPartido(p.getIdPartido(), new Date(), null);
+        Partido p = partidoService.programarPartido(idFase, idEq1, idEq2, idCancha, null, new Date(), 90, admin);
+        partidoService.cerrarActaPartido(p.getIdPartido(), new Date(), null, admin);
 
         // Tres jugadores distintos para evitar uq_sancion_evento_origen en el mismo partido
         Jugador jSanSinPub = new Jugador(idEq1, "Jugador SinPub " + s, randomDni(), new Date(95, 1, 1), "Delantero", TiposDatos.EstadoJugador.SUSPENDIDO);
@@ -112,7 +133,7 @@ public class EndurecimientoInf05IT {
         Long idSanSinPub = sancionDAO.insertar(sanSinPublicar);
 
         TorneoExcepcion exSinPub = assertThrows(TorneoExcepcion.class, () -> {
-            reclamoService.apelarSancion(idSanSinPub, idCap, "Apelación prematura de sanción que aún no fue formalizada");
+            reclamoService.apelarSancion(idSanSinPub, idCap, "Apelación prematura de sanción que aún no fue formalizada", cap);
         });
         assertTrue(exSinPub.getMessage().contains("aún no ha sido formalmente publicada"),
                 "Debe indicar que la sanción no ha sido formalmente publicada");
@@ -128,7 +149,7 @@ public class EndurecimientoInf05IT {
         sanEnPlazo.setFechaPublicacionFormal(cal2DiasAtras.getTime());
         Long idSanEnPlazo = sancionDAO.insertar(sanEnPlazo);
 
-        Reclamo apelacion = reclamoService.apelarSancion(idSanEnPlazo, idCap, "Apelación formal fundamentada presentada dentro de plazo legal");
+        Reclamo apelacion = reclamoService.apelarSancion(idSanEnPlazo, idCap, "Apelación formal fundamentada presentada dentro de plazo legal", cap);
         assertNotNull(apelacion.getId());
         assertEquals("PENDIENTE", apelacion.getEstado());
 
@@ -144,7 +165,7 @@ public class EndurecimientoInf05IT {
         Long idSanVencida = sancionDAO.insertar(sanVencida);
 
         TorneoExcepcion exVencida = assertThrows(TorneoExcepcion.class, () -> {
-            reclamoService.apelarSancion(idSanVencida, idCap, "Apelación tardía presentada fuera de los 5 días hábiles");
+            reclamoService.apelarSancion(idSanVencida, idCap, "Apelación tardía presentada fuera de los 5 días hábiles", cap);
         });
         assertTrue(exVencida.getMessage().contains("Plazo de apelación vencido"),
                 "Debe rechazar por plazo de apelación vencido (más de 5 días corridos)");
@@ -154,6 +175,9 @@ public class EndurecimientoInf05IT {
     @DisplayName("H-02: Desacoplamiento de estado intrínseco de jugador vs sanciones (LESIONADO / INHABILITADO no se borran)")
     void testDesacoplamientoEstadoJugadorSanciones() throws Exception {
         String s = sufijo();
+
+        // Operador autenticado (ADMINISTRADOR) habilitado para programar, cerrar actas y anular sanciones
+        Usuario admin = operadorConRol(TiposDatos.Rol.ADMINISTRADOR);
 
         Torneo torneo = new Torneo("Torneo Desacople " + s, "LIGA", 8, new Date());
         Long idTorneo = torneoDAO.insertar(torneo);
@@ -172,8 +196,8 @@ public class EndurecimientoInf05IT {
         Equipo eq2 = new Equipo("Eq2 Desacople " + s, catLibre, "Blanco", cancha, cap);
         Long idEq2 = equipoDAO.insertar(eq2, idCap);
 
-        Partido p = partidoService.programarPartido(idFase, idEq1, idEq2, idCancha, null, new Date(), 90);
-        partidoService.cerrarActaPartido(p.getIdPartido(), new Date(), null);
+        Partido p = partidoService.programarPartido(idFase, idEq1, idEq2, idCancha, null, new Date(), 90, admin);
+        partidoService.cerrarActaPartido(p.getIdPartido(), new Date(), null, admin);
 
         // 1. Jugador con estado LESIONADO
         Jugador jLesionado = new Jugador(idEq1, "Jugador Lesionado " + s, randomDni(), new Date(95, 2, 2), "Mediocampista", TiposDatos.EstadoJugador.LESIONADO);
@@ -187,7 +211,7 @@ public class EndurecimientoInf05IT {
         Long idSanLes = sancionDAO.insertar(sanLes);
 
         // Al anular la sanción disciplinaria, NO debe transformar al jugador LESIONADO en ACTIVO
-        disciplinaService.anularSancion(idSanLes, "Error administrativo comprobado en acta");
+        disciplinaService.anularSancion(idSanLes, "Error administrativo comprobado en acta", admin);
 
         try (Connection conn = ConexionBD.obtenerConexion()) {
             Jugador postAnulacion = jugadorDAO.buscarPorId(conn, idJLes);
@@ -210,7 +234,7 @@ public class EndurecimientoInf05IT {
         sanInhab.setFechaPublicacionFormal(new Date());
         Long idSanInhab = sancionDAO.insertar(sanInhab);
 
-        disciplinaService.anularSancion(idSanInhab, "Anulación por tribunal");
+        disciplinaService.anularSancion(idSanInhab, "Anulación por tribunal", admin);
 
         try (Connection conn = ConexionBD.obtenerConexion()) {
             Jugador postInhab = jugadorDAO.buscarPorId(conn, idJInhab);
@@ -230,7 +254,7 @@ public class EndurecimientoInf05IT {
         sanSusp.setFechaPublicacionFormal(new Date());
         Long idSanSusp = sancionDAO.insertar(sanSusp);
 
-        disciplinaService.anularSancion(idSanSusp, "Absolución disciplinaria completa");
+        disciplinaService.anularSancion(idSanSusp, "Absolución disciplinaria completa", admin);
 
         try (Connection conn = ConexionBD.obtenerConexion()) {
             Jugador postSusp = jugadorDAO.buscarPorId(conn, idJSusp);
@@ -244,6 +268,9 @@ public class EndurecimientoInf05IT {
     @DisplayName("H-03: Contrato de idempotencia estricto ON CONFLICT DO NOTHING (preserva datos originales)")
     void testContratoIdempotenciaDoNothing() throws Exception {
         String s = sufijo();
+
+        // Operador autenticado (ADMINISTRADOR) habilitado para programar encuentros
+        Usuario admin = operadorConRol(TiposDatos.Rol.ADMINISTRADOR);
 
         Torneo torneo = new Torneo("Torneo Idemp " + s, "LIGA", 8, new Date());
         Long idTorneo = torneoDAO.insertar(torneo);
@@ -262,7 +289,7 @@ public class EndurecimientoInf05IT {
         Equipo eq2 = new Equipo("Eq2 Idemp " + s, catLibre, "Negro", cancha, cap);
         Long idEq2 = equipoDAO.insertar(eq2, idCap);
 
-        Partido p = partidoService.programarPartido(idFase, idEq1, idEq2, idCancha, null, new Date(), 90);
+        Partido p = partidoService.programarPartido(idFase, idEq1, idEq2, idCancha, null, new Date(), 90, admin);
 
         Jugador jug = new Jugador(idEq1, "Jugador Idempotencia " + s, randomDni(), new Date(95, 5, 5), "Arquero", TiposDatos.EstadoJugador.ACTIVO);
         Long idJug = jugadorDAO.insertar(jug, idEq1);
@@ -306,6 +333,9 @@ public class EndurecimientoInf05IT {
     void testCheckCronologiaTipoExpulsion() throws Exception {
         String s = sufijo();
 
+        // Operador autenticado (ADMINISTRADOR) habilitado para programar encuentros
+        Usuario admin = operadorConRol(TiposDatos.Rol.ADMINISTRADOR);
+
         Torneo torneo = new Torneo("Torneo Check " + s, "LIGA", 8, new Date());
         Long idTorneo = torneoDAO.insertar(torneo);
         Fase fase = new Fase("Fase Check", 1, false);
@@ -323,7 +353,7 @@ public class EndurecimientoInf05IT {
         Equipo eq2 = new Equipo("Eq2 Check " + s, catLibre, "Blanco", cancha, cap);
         Long idEq2 = equipoDAO.insertar(eq2, idCap);
 
-        Partido p = partidoService.programarPartido(idFase, idEq1, idEq2, idCancha, null, new Date(), 90);
+        Partido p = partidoService.programarPartido(idFase, idEq1, idEq2, idCancha, null, new Date(), 90, admin);
         Jugador jug = new Jugador(idEq1, "Jugador Check " + s, randomDni(), new Date(95, 6, 6), "Defensa", TiposDatos.EstadoJugador.ACTIVO);
         Long idJug = jugadorDAO.insertar(jug, idEq1);
 
@@ -377,6 +407,9 @@ public class EndurecimientoInf05IT {
     void testRollbackTransaccionalCierrePartido() throws Exception {
         String s = sufijo();
 
+        // Operador autenticado (ADMINISTRADOR) habilitado para programar y cerrar actas
+        Usuario admin = operadorConRol(TiposDatos.Rol.ADMINISTRADOR);
+
         Torneo torneo = new Torneo("Torneo Rollback " + s, "LIGA", 8, new Date());
         Long idTorneo = torneoDAO.insertar(torneo);
         Fase fase = new Fase("Fase Rollback", 1, false);
@@ -394,7 +427,7 @@ public class EndurecimientoInf05IT {
         Equipo eqVis = new Equipo("Eq Vis " + s, catLibre, "Negro", cancha, cap);
         Long idEqVis = equipoDAO.insertar(eqVis, idCap);
 
-        Partido p = partidoService.programarPartido(idFase, idEqLoc, idEqVis, idCancha, null, new Date(), 90);
+        Partido p = partidoService.programarPartido(idFase, idEqLoc, idEqVis, idCancha, null, new Date(), 90, admin);
         Long idPartido = p.getIdPartido();
 
         Jugador j = new Jugador(idEqLoc, "Jugador Rollback " + s, randomDni(), new Date(95, 7, 7), "Delantero", TiposDatos.EstadoJugador.ACTIVO);
@@ -410,7 +443,7 @@ public class EndurecimientoInf05IT {
         incidenciasFinales.add(incidenciaCorrupta);
 
         TorneoExcepcion exCierre = assertThrows(TorneoExcepcion.class, () -> {
-            partidoService.cerrarActaPartido(idPartido, new Date(), incidenciasFinales);
+            partidoService.cerrarActaPartido(idPartido, new Date(), incidenciasFinales, admin);
         });
         assertTrue(exCierre.getMessage().contains("Fallo en la transacción atómica de cierre de partido"));
 

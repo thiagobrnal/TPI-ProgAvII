@@ -173,6 +173,49 @@ public class UsuarioDAO {
         return lista;
     }
 
+    /**
+     * Lista todas las cuentas registradas (activas e inactivas) con su rol asociado.
+     * Se utiliza desde la capa de presentacion de CU-17 (Gestionar Usuarios) para
+     * poder exhibir el estado real de cada cuenta y reactivated las que fueron dadas de baja.
+     */
+    public List<Usuario> buscarTodos() throws SQLException {
+        try (Connection conn = ConexionBD.obtenerConexion()) {
+            return buscarTodos(conn);
+        }
+    }
+
+    public List<Usuario> buscarTodos(Connection conn) throws SQLException {
+        String sql = "SELECT u.id_usuario, u.usuario, u.contrasena, u.mail, u.nombre, u.apellido, u.activo, r.codigo AS rol_codigo "
+                   + "FROM usuarios u JOIN roles r ON u.id_rol = r.id_rol "
+                   + "ORDER BY u.apellido, u.nombre, u.id_usuario";
+        List<Usuario> lista = new ArrayList<>();
+        try (PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                lista.add(mapearUsuario(rs));
+            }
+        }
+        return lista;
+    }
+
+    /**
+     * Activa o desactiva una cuenta de usuario (CU-17). No altera jamas el hash de contrasena.
+     */
+    public void actualizarActivo(Connection conn, Long idUsuario, boolean activo) throws SQLException {
+        String sql = "UPDATE usuarios SET activo = ? WHERE id_usuario = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setBoolean(1, activo);
+            ps.setLong(2, idUsuario);
+            ps.executeUpdate();
+        }
+    }
+
+    public void actualizarActivo(Long idUsuario, boolean activo) throws SQLException {
+        try (Connection conn = ConexionBD.obtenerConexion()) {
+            actualizarActivo(conn, idUsuario, activo);
+        }
+    }
+
     public int contarUsuarios(Connection conn) throws SQLException {
         String sql = "SELECT COUNT(*) FROM usuarios";
         try (Statement st = conn.createStatement();
