@@ -1,62 +1,55 @@
 package com.gestionamateur.tpi.progav.controlador;
 
+import com.gestionamateur.tpi.progav.dao.JugadorDAO;
 import com.gestionamateur.tpi.progav.modelo.Jugador;
-import com.gestionamateur.tpi.progav.modelo.TiposDatos;
 import com.gestionamateur.tpi.progav.modelo.TorneoExcepcion;
+import com.gestionamateur.tpi.progav.modelo.Usuario;
+import com.gestionamateur.tpi.progav.servicio.JugadorService;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Date;
+import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class GestorJugadores {
 
-    private static List<Jugador> dbJugadores = new ArrayList<>();
+    private static final Logger LOGGER = Logger.getLogger(GestorJugadores.class.getName());
+    private static final List<Jugador> dbJugadores = new ArrayList<>();
+    private final JugadorService jugadorService = new JugadorService();
+    private final JugadorDAO jugadorDAO = new JugadorDAO();
 
-    // CU 2: Dar de alta jugadores
+    public GestorJugadores() {
+    }
+
+    // CU 2: Dar de alta jugadores con persistencia obligatoria
     public String iniciarAltaJugador(String nombre, int dni, Date fechaNacimiento, String posicion) {
-        
-        // Ejecución de Sub-Caso CU 2.1: Controlar inscripción (Validaciones del sistema)
-        if (!validarEdadMinima(fechaNacimiento)) {
-            return "ERROR: El jugador no cumple con la edad mínima reglamentaria.";
-        }
-        
-        if (verificarSuspensionesVigentes(dni)) {
-            return "ERROR: El jugador tiene una suspensión activa en el tribunal de disciplina.";
-        }
-        
-        // Verificar que el DNI no esté duplicado en la base de datos
-        for (Jugador j : dbJugadores) {
-            if (j.getDni() == dni) {
-                return "ERROR: El DNI " + dni + " ya se encuentra registrado en el sistema.";
-            }
-        }
+        return iniciarAltaJugador(nombre, dni, fechaNacimiento, posicion, null, null);
+    }
 
+    public String iniciarAltaJugador(String nombre, int dni, Date fechaNacimiento, String posicion, Long idEquipo, Usuario operador) {
         try {
-            // Si pasa los controles del sistema, delegamos la creación estricta al Modelo.
-            // Si hay un dato inválido (ej. DNI negativo), el constructor lanzará la TorneoExcepcion.
-            Jugador nuevoJugador = new Jugador(nombre, dni, fechaNacimiento, posicion, TiposDatos.EstadoJugador.ACTIVO);
-            
-            // Persistencia (Simulada en la lista estática)
-            dbJugadores.add(nuevoJugador);
-            
-            return "ÉXITO: Jugador habilitado e inscripto. Listo para imprimir credencial.";
-            
-        } catch (TorneoExcepcion ex) {
-            // Atrapamos la regla de negocio rota desde la clase Jugador y la mostramos a la Vista
-            return "ERROR DE VALIDACIÓN: " + ex.getMessage();
+            Jugador nuevo = jugadorService.registrarJugador(nombre, dni, fechaNacimiento, posicion, idEquipo, operador);
+            dbJugadores.add(nuevo);
+            return "ÉXITO: Jugador habilitado e inscripto en la base de datos (ID: " + nuevo.getId() + "). Listo para imprimir credencial.";
+        } catch (TorneoExcepcion te) {
+            return "ERROR DE VALIDACIÓN: " + te.getMessage();
         } catch (Exception e) {
-            // Falla de seguridad para caídas inesperadas
-            return "ERROR CRÍTICO: Falló la creación del jugador (" + e.getMessage() + ").";
+            LOGGER.log(Level.SEVERE, "Fallo de persistencia JDBC al registrar jugador: " + e.getMessage());
+            // Sin fallback engañoso a memoria
+            return "ERROR DE CONEXIÓN: La base de datos no está disponible (" + e.getMessage() + "). No se guardaron cambios.";
         }
     }
 
-    // Métodos privados para uso interno del controlador (Encapsulamiento de la lógica)
-    private boolean validarEdadMinima(Date fechaNacimiento) {
-        // TODO: Acá en el futuro calcularíamos si (AñoActual - AñoNacimiento) >= 16
-        return fechaNacimiento != null; 
-    }
-
-    private boolean verificarSuspensionesVigentes(int dni) {
-        // TODO: Acá leeríamos la base de datos de Sanciones para ver si está inhabilitado
-        return false; // Simulado: por ahora nadie está suspendido
+    public static List<Jugador> getJugadoresRegistrados() {
+        try {
+            JugadorDAO dao = new JugadorDAO();
+            List<Jugador> listaBD = dao.buscarTodos();
+            if (listaBD != null && !listaBD.isEmpty()) {
+                return listaBD;
+            }
+        } catch (Exception e) {
+            LOGGER.warning("No se pudieron cargar jugadores desde base de datos: " + e.getMessage());
+        }
+        return dbJugadores;
     }
 }

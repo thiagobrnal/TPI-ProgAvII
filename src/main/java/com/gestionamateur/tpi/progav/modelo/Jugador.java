@@ -9,6 +9,7 @@ public class Jugador {
     private static final Logger LOGGER = Logger.getLogger(Jugador.class.getName());
 
     private Long id;
+    private Long idEquipo;
     private String nombre;
     private int dni;
     private Date fechaNacimiento;
@@ -31,6 +32,12 @@ public class Jugador {
         LOGGER.info("Se ha inscripto correctamente el jugador: " + this.nombre + " (DNI: " + this.dni + ")");
     }
 
+    // Constructor con equipo
+    public Jugador(Long idEquipo, String nombre, int dni, Date fechaNacimiento, String posicion, TiposDatos.EstadoJugador estado) throws TorneoExcepcion {
+        this(nombre, dni, fechaNacimiento, posicion, estado);
+        this.idEquipo = idEquipo;
+    }
+
     // Comportamiento de Dominio
     public void sumarTarjetaAlConteo() { 
         this.historialTarjetas++; 
@@ -39,6 +46,9 @@ public class Jugador {
 
     public Long getId() { return id; } 
     public void setId(Long id) { this.id = id; }
+
+    public Long getIdEquipo() { return idEquipo; }
+    public void setIdEquipo(Long idEquipo) { this.idEquipo = idEquipo; }
     
     public String getNombre() { return nombre; }
     

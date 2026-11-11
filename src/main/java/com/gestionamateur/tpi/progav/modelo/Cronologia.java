@@ -10,22 +10,35 @@ public class Cronologia {
 
     private Long id;
     private Date minuto;
+    private Integer minutoPartido = 0;
     private TiposDatos.TipoAccion accion;
+    private String tipoExpulsion; // DIRECTA o DOBLE_AMARILLA para TARJETA_ROJA
     private Jugador autor;
     private Partido partido;
+    private String observacion;
 
-    // Constructor vacío requerido por JPA
+    // Constructor vacío requerido por JPA / frameworks
     public Cronologia() {}
 
-    // 2. Constructor completo para crear la incidencia de forma segura
+    // 2. Constructor original retrocompatible
     public Cronologia(Date minuto, TiposDatos.TipoAccion accion, Jugador autor, Partido partido) throws TorneoExcepcion {
         setMinuto(minuto);
         setAccion(accion);
         setAutor(autor);
         setPartido(partido);
         
-        // Registro exitoso en la bitácora
         LOGGER.info("Nueva incidencia registrada: [" + this.accion.name() + "] por el jugador ID " + this.autor.getId() + " en el partido ID " + this.partido.getIdPartido());
+    }
+
+    // 3. Constructor completo con minuto de juego y tipo de expulsión
+    public Cronologia(int minutoPartido, TiposDatos.TipoAccion accion, String tipoExpulsion, Jugador autor, Partido partido, String observacion) throws TorneoExcepcion {
+        setMinutoPartido(minutoPartido);
+        setAccion(accion);
+        setTipoExpulsion(tipoExpulsion);
+        setAutor(autor);
+        setPartido(partido);
+        this.observacion = observacion;
+        this.minuto = new Date();
     }
 
     public Long getId() { return id; } 
@@ -33,13 +46,20 @@ public class Cronologia {
     
     public Date getMinuto() { return minuto; }
     
-    // 3. Validaciones de negocio: Nada puede ser nulo en un evento de cronología
     public void setMinuto(Date minuto) throws TorneoExcepcion { 
         if (minuto == null) {
             LOGGER.warning("Validación fallida: Intento de registrar incidencia sin especificar el minuto.");
             throw new TorneoExcepcion("Debe indicar el tiempo exacto en el que ocurrió la incidencia.");
         }
         this.minuto = minuto; 
+    }
+
+    public Integer getMinutoPartido() { return minutoPartido; }
+    public void setMinutoPartido(Integer minutoPartido) throws TorneoExcepcion {
+        if (minutoPartido != null && minutoPartido < 0) {
+            throw new TorneoExcepcion("El minuto de juego no puede ser negativo.");
+        }
+        this.minutoPartido = minutoPartido != null ? minutoPartido : 0;
     }
     
     public TiposDatos.TipoAccion getAccion() { return accion; }
@@ -50,6 +70,25 @@ public class Cronologia {
             throw new TorneoExcepcion("Debe clasificar el tipo de acción (Gol, Amarilla, Roja, Cambio).");
         }
         this.accion = accion; 
+        if (accion != TiposDatos.TipoAccion.TARJETA_ROJA) {
+            this.tipoExpulsion = null;
+        }
+    }
+
+    public String getTipoExpulsion() { return tipoExpulsion; }
+    public void setTipoExpulsion(String tipoExpulsion) throws TorneoExcepcion {
+        if (tipoExpulsion != null && !tipoExpulsion.trim().isEmpty()) {
+            String norm = tipoExpulsion.trim().toUpperCase();
+            if (!norm.equals("DIRECTA") && !norm.equals("DOBLE_AMARILLA")) {
+                throw new TorneoExcepcion("Tipo de expulsión inválido: debe ser 'DIRECTA' o 'DOBLE_AMARILLA'.");
+            }
+            if (this.accion != null && this.accion != TiposDatos.TipoAccion.TARJETA_ROJA) {
+                throw new TorneoExcepcion("Solo las incidencias de TARJETA_ROJA pueden especificar un tipo de expulsión.");
+            }
+            this.tipoExpulsion = norm;
+        } else {
+            this.tipoExpulsion = null;
+        }
     }
     
     public Jugador getAutor() { return autor; }
@@ -71,4 +110,7 @@ public class Cronologia {
         }
         this.partido = partido; 
     }
+
+    public String getObservacion() { return observacion; }
+    public void setObservacion(String observacion) { this.observacion = observacion; }
 }

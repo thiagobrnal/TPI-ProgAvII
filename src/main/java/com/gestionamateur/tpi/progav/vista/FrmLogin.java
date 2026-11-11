@@ -1,11 +1,9 @@
 package com.gestionamateur.tpi.progav.vista;
 
-// Importamos el gestor desde la nueva ruta de Thiago
 import com.gestionamateur.tpi.progav.controlador.GestorUsuarios;
 
 public class FrmLogin extends javax.swing.JFrame {
 
-    // Referencia al controlador (Aplicación de MVC)
     private GestorUsuarios gestorUsuarios;
 
     public FrmLogin() {
@@ -23,7 +21,7 @@ public class FrmLogin extends javax.swing.JFrame {
         txtUsuario = new javax.swing.JTextField();
         txtContrasenia = new javax.swing.JPasswordField();
         btnIngresar = new javax.swing.JButton();
-        btnCrearCuenta = new javax.swing.JButton(); // Instanciamos el nuevo botón
+        btnCrearCuenta = new javax.swing.JButton();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
         setTitle("Sistema de Torneos - Login");
@@ -48,30 +46,37 @@ public class FrmLogin extends javax.swing.JFrame {
             }
         });
 
-        // --- Layout actualizado para incluir ambos botones ---
+        btnAccesoPublico = new javax.swing.JButton();
+        btnAccesoPublico.setText("Acceso Público (Invitado)");
+        btnAccesoPublico.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btnAccesoPublicoActionPerformed(evt);
+            }
+        });
+
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
         getContentPane().setLayout(layout);
         layout.setHorizontalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(layout.createSequentialGroup()
-                .addGap(60, 60, 60)
-                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                .addGap(45, 45, 45)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
                     .addGroup(layout.createSequentialGroup()
-                        .addComponent(btnCrearCuenta)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 40, Short.MAX_VALUE)
-                        .addComponent(btnIngresar))
+                        .addComponent(btnIngresar)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addComponent(btnCrearCuenta))
+                    .addComponent(btnAccesoPublico, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .addGroup(layout.createSequentialGroup()
                         .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addComponent(jLabel2)
                             .addComponent(jLabel3))
-                        .addGap(25, 25, 25)
-                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                            .addComponent(txtUsuario)
-                            .addComponent(txtContrasenia, javax.swing.GroupLayout.DEFAULT_SIZE, 150, Short.MAX_VALUE)
-                            .addGroup(layout.createSequentialGroup()
-                                .addGap(10, 10, 10)
-                                .addComponent(jLabel1)))))
-                .addContainerGap(60, Short.MAX_VALUE))
+                        .addGap(24, 24, 24)
+                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(jLabel1)
+                            .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                                .addComponent(txtUsuario)
+                                .addComponent(txtContrasenia, javax.swing.GroupLayout.DEFAULT_SIZE, 150, Short.MAX_VALUE)))))
+                .addContainerGap(45, Short.MAX_VALUE))
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -86,22 +91,22 @@ public class FrmLogin extends javax.swing.JFrame {
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(jLabel3)
                     .addComponent(txtContrasenia, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 51, Short.MAX_VALUE)
+                .addGap(25, 25, 25)
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(btnIngresar)
                     .addComponent(btnCrearCuenta))
-                .addGap(45, 45, 45))
+                .addGap(15, 15, 15)
+                .addComponent(btnAccesoPublico)
+                .addContainerGap(30, Short.MAX_VALUE))
         );
 
         pack();
     }
 
-    // Tratamiento del Evento: Iniciar Sesión
     private void btnIngresarActionPerformed(java.awt.event.ActionEvent evt) {
         String usr = txtUsuario.getText();
         String pass = new String(txtContrasenia.getPassword());
 
-        // Aca también cambiamos el paquete viejo de modelo por la ruta nueva
         com.gestionamateur.tpi.progav.modelo.Usuario usuarioLogueado = gestorUsuarios.autenticarUsuario(usr, pass);
 
         if (usuarioLogueado != null) {
@@ -111,18 +116,34 @@ public class FrmLogin extends javax.swing.JFrame {
             menu.setVisible(true);
             this.dispose(); 
         } else {
-            javax.swing.JOptionPane.showMessageDialog(this, "Credenciales incorrectas", "Error", javax.swing.JOptionPane.ERROR_MESSAGE);
+            if (!gestorUsuarios.esSistemaInicializado()) {
+                javax.swing.JOptionPane.showMessageDialog(this, 
+                    "El sistema no posee usuarios registrados.\nDebe inicializar el Primer Administrador usando 'Crear Cuenta'.", 
+                    "Sistema No Inicializado", javax.swing.JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                javax.swing.JOptionPane.showMessageDialog(this, "Credenciales incorrectas", "Error", javax.swing.JOptionPane.ERROR_MESSAGE);
+            }
         }
     }
 
-    // Tratamiento del Evento: Abrir ventana de registro
     private void btnCrearCuentaActionPerformed(java.awt.event.ActionEvent evt) {
         FrmRegistroUsuario ventanaRegistro = new FrmRegistroUsuario();
         ventanaRegistro.setVisible(true);
-        // Dejamos el Login abierto de fondo por si el usuario cancela el registro
     }
 
-    // Declaración de componentes
+    private void btnAccesoPublicoActionPerformed(java.awt.event.ActionEvent evt) {
+        try {
+            com.gestionamateur.tpi.progav.modelo.Usuario publico = new com.gestionamateur.tpi.progav.modelo.Usuario(
+                    "invitado", "invitado123", "publico@torneo.local", "Público", "Invitado", com.gestionamateur.tpi.progav.modelo.TiposDatos.Rol.PUBLICO);
+            FrmPrincipal menu = new FrmPrincipal(publico);
+            menu.setVisible(true);
+            this.dispose();
+        } catch (com.gestionamateur.tpi.progav.modelo.TorneoExcepcion te) {
+            javax.swing.JOptionPane.showMessageDialog(this, "Error al iniciar sesión pública: " + te.getMessage(), "Error", javax.swing.JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private javax.swing.JButton btnAccesoPublico;
     private javax.swing.JButton btnCrearCuenta;
     private javax.swing.JButton btnIngresar;
     private javax.swing.JLabel jLabel1;

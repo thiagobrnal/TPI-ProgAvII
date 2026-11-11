@@ -1,6 +1,10 @@
 package com.gestionamateur.tpi.progav.vista;
 
+import com.gestionamateur.tpi.progav.controlador.GestorEquipos;
 import com.gestionamateur.tpi.progav.controlador.GestorJugadores;
+import com.gestionamateur.tpi.progav.modelo.Equipo;
+import com.gestionamateur.tpi.progav.modelo.TiposDatos;
+import com.gestionamateur.tpi.progav.modelo.Usuario;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -10,8 +14,14 @@ public class FrmAltaJugador extends javax.swing.JFrame {
 
     private GestorJugadores gestorJugadores;
     private SimpleDateFormat formatoFecha;
+    private Usuario operador;
 
     public FrmAltaJugador() {
+        this(null);
+    }
+
+    public FrmAltaJugador(Usuario operador) {
+        this.operador = operador;
         initComponents();
         this.setLocationRelativeTo(null);
         gestorJugadores = new GestorJugadores();
@@ -137,10 +147,20 @@ public class FrmAltaJugador extends javax.swing.JFrame {
             int dni = Integer.parseInt(dniTexto);
             Date fechaNacimiento = formatoFecha.parse(fechaTexto);
 
-            // 3. Llamada a tu controlador
-            String respuesta = gestorJugadores.iniciarAltaJugador(nombre, dni, fechaNacimiento, posicion);
+            // 3. Obtener equipo si el operador es capitán
+            Long idEquipo = null;
+            if (operador != null && operador.getRol() == TiposDatos.Rol.CAPITAN) {
+                GestorEquipos ge = new GestorEquipos();
+                Equipo eq = ge.buscarEquipoDeCapitan(operador.getId());
+                if (eq != null) {
+                    idEquipo = eq.getIdEquipo();
+                }
+            }
 
-            // 4. Tu controlador devuelve un String que empieza con "ERROR" si algo falló
+            // 4. Llamada a tu controlador con contexto de seguridad
+            String respuesta = gestorJugadores.iniciarAltaJugador(nombre, dni, fechaNacimiento, posicion, idEquipo, operador);
+
+            // 5. Tu controlador devuelve un String que empieza con "ERROR" si algo falló
             if (respuesta.startsWith("ERROR")) {
                 JOptionPane.showMessageDialog(this, respuesta, "Error en el registro", JOptionPane.ERROR_MESSAGE);
             } else {

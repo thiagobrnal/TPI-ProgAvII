@@ -2,13 +2,20 @@ package com.gestionamateur.tpi.progav.vista;
 
 import com.gestionamateur.tpi.progav.controlador.GestorCanchas;
 import com.gestionamateur.tpi.progav.modelo.TorneoExcepcion;
+import com.gestionamateur.tpi.progav.modelo.Usuario;
 import javax.swing.JOptionPane;
 
 public class FrmAltaCancha extends javax.swing.JFrame {
 
     private GestorCanchas gestorCanchas;
+    private Usuario operador;
 
     public FrmAltaCancha() {
+        this(null);
+    }
+
+    public FrmAltaCancha(Usuario operador) {
+        this.operador = operador;
         initComponents();
         this.setLocationRelativeTo(null);
         gestorCanchas = new GestorCanchas();
@@ -111,7 +118,7 @@ public class FrmAltaCancha extends javax.swing.JFrame {
         String superficie = cmbSuperficie.getSelectedItem().toString();
 
         try {
-            String respuesta = gestorCanchas.registrarCancha(nombre, direccion, superficie);
+            String respuesta = gestorCanchas.registrarCancha(nombre, direccion, superficie, operador);
             JOptionPane.showMessageDialog(this, respuesta, "Registro Exitoso", JOptionPane.INFORMATION_MESSAGE);
             txtNombre.setText("");
             txtDireccion.setText("");

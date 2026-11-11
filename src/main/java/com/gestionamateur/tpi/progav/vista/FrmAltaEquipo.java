@@ -1,21 +1,65 @@
 package com.gestionamateur.tpi.progav.vista;
 
 import com.gestionamateur.tpi.progav.controlador.GestorEquipos;
-import com.gestionamateur.tpi.progav.modelo.Cancha;
+import com.gestionamateur.tpi.progav.controlador.GestorUsuarios;
+import com.gestionamateur.tpi.progav.dao.CategoriaDAO;
 import com.gestionamateur.tpi.progav.modelo.Categoria;
 import com.gestionamateur.tpi.progav.modelo.TiposDatos;
 import com.gestionamateur.tpi.progav.modelo.Usuario;
+import java.util.ArrayList;
+import java.util.List;
 import javax.swing.JOptionPane;
 
 public class FrmAltaEquipo extends javax.swing.JFrame {
 
-    // Controlador
     private GestorEquipos gestorEquipos;
+    private GestorUsuarios gestorUsuarios;
+    private Usuario operador;
+    private List<Categoria> categoriasCargadas = new ArrayList<>();
+    private List<Usuario> capitanesCargados = new ArrayList<>();
 
     public FrmAltaEquipo() {
+        this(null);
+    }
+
+    public FrmAltaEquipo(Usuario operador) {
+        this.operador = operador;
         initComponents();
-        this.setLocationRelativeTo(null); // Centra la ventana
+        this.setLocationRelativeTo(null);
         gestorEquipos = new GestorEquipos();
+        gestorUsuarios = new GestorUsuarios();
+        cargarCategorias();
+        cargarCapitanes();
+    }
+
+    private void cargarCategorias() {
+        cmbCategoria.removeAllItems();
+        categoriasCargadas.clear();
+        try {
+            CategoriaDAO catDAO = new CategoriaDAO();
+            categoriasCargadas = catDAO.buscarTodas();
+            for (Categoria cat : categoriasCargadas) {
+                cmbCategoria.addItem(cat.getNombre() + " (" + cat.getGenero() + ")");
+            }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Error al cargar categorías desde BD: " + e.getMessage(), "Advertencia", JOptionPane.WARNING_MESSAGE);
+        }
+    }
+
+    private void cargarCapitanes() {
+        cmbCapitan.removeAllItems();
+        capitanesCargados.clear();
+        if (operador != null && operador.getRol() == TiposDatos.Rol.CAPITAN) {
+            cmbCapitan.addItem(operador.getNombre() + " " + operador.getApellido() + " (" + operador.getNombreUsuario() + ")");
+            capitanesCargados.add(operador);
+            cmbCapitan.setEnabled(false);
+        } else {
+            List<Usuario> caps = gestorUsuarios.getCapitanesRegistrados();
+            capitanesCargados.addAll(caps);
+            for (Usuario u : caps) {
+                cmbCapitan.addItem(u.getNombre() + " " + u.getApellido() + " (" + u.getNombreUsuario() + ")");
+            }
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -28,6 +72,8 @@ public class FrmAltaEquipo extends javax.swing.JFrame {
         cmbCategoria = new javax.swing.JComboBox<>();
         lblColor = new javax.swing.JLabel();
         txtColor = new javax.swing.JTextField();
+        lblCapitan = new javax.swing.JLabel();
+        cmbCapitan = new javax.swing.JComboBox<>();
         btnGuardar = new javax.swing.JButton();
         btnCancelar = new javax.swing.JButton();
 
@@ -40,9 +86,7 @@ public class FrmAltaEquipo extends javax.swing.JFrame {
         lblNombre.setText("Nombre del Equipo:");
         lblCategoria.setText("Categoría:");
         lblColor.setText("Color de Camiseta:");
-
-        // Opciones de categorías para el prototipo
-        cmbCategoria.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "Libre", "Senior", "Femenino", "Sub-20" }));
+        lblCapitan.setText("Capitán Responsable:");
 
         btnGuardar.setText("Guardar Equipo");
         btnGuardar.addActionListener(new java.awt.event.ActionListener() {
@@ -58,7 +102,6 @@ public class FrmAltaEquipo extends javax.swing.JFrame {
             }
         });
 
-        // --- Layout manual para que se vea ordenado ---
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
         getContentPane().setLayout(layout);
         layout.setHorizontalGroup(
@@ -76,12 +119,14 @@ public class FrmAltaEquipo extends javax.swing.JFrame {
                             .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                                 .addComponent(lblNombre)
                                 .addComponent(lblCategoria)
-                                .addComponent(lblColor))
+                                .addComponent(lblColor)
+                                .addComponent(lblCapitan))
                             .addGap(18, 18, 18)
                             .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
                                 .addComponent(txtNombre)
-                                .addComponent(cmbCategoria, 0, 150, Short.MAX_VALUE)
-                                .addComponent(txtColor)))))
+                                .addComponent(cmbCategoria, 0, 180, Short.MAX_VALUE)
+                                .addComponent(txtColor)
+                                .addComponent(cmbCapitan, 0, 180, Short.MAX_VALUE)))))
                 .addContainerGap(40, Short.MAX_VALUE))
         );
         layout.setVerticalGroup(
@@ -89,7 +134,7 @@ public class FrmAltaEquipo extends javax.swing.JFrame {
             .addGroup(layout.createSequentialGroup()
                 .addGap(25, 25, 25)
                 .addComponent(lblTitulo)
-                .addGap(30, 30, 30)
+                .addGap(25, 25, 25)
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(lblNombre)
                     .addComponent(txtNombre, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
@@ -101,7 +146,11 @@ public class FrmAltaEquipo extends javax.swing.JFrame {
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(lblColor)
                     .addComponent(txtColor, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 40, Short.MAX_VALUE)
+                .addGap(18, 18, 18)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(lblCapitan)
+                    .addComponent(cmbCapitan, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 35, Short.MAX_VALUE)
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(btnGuardar)
                     .addComponent(btnCancelar))
@@ -111,53 +160,50 @@ public class FrmAltaEquipo extends javax.swing.JFrame {
         pack();
     }
 
-    // --- LÓGICA DEL BOTÓN GUARDAR (Conexión MVC) ---
     private void btnGuardarActionPerformed(java.awt.event.ActionEvent evt) {
-        
-        String nombre = txtNombre.getText();
-        String catSeleccionada = cmbCategoria.getSelectedItem().toString();
-        String color = txtColor.getText();
+        String nombre = txtNombre.getText().trim();
+        String color = txtColor.getText().trim();
 
-        // Validaciones básicas de la vista
-        if(nombre.trim().isEmpty() || color.trim().isEmpty()){
-            JOptionPane.showMessageDialog(this, "Por favor, complete todos los campos.", "Campos vacíos", JOptionPane.WARNING_MESSAGE);
+        if (nombre.isEmpty() || color.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Por favor, complete todos los campos obligatorios.", "Campos vacíos", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        try {
-            // 1. Creamos objetos simulados utilizando los constructores blindados que acabamos de programar.
-            // Si algún dato simulado es inválido (ej. mail sin arroba), esto lanzará TorneoExcepcion.
-            Categoria categoriaObj = new Categoria(catSeleccionada, "Mixto", 18, 99);
-            Cancha sedeSimulada = new Cancha("Cancha La Nueva", "Av. San Martín 1500", "Sintético");
-            Usuario capitanSimulado = new Usuario("capitan1", "123", "capitan@mail.com", "Juan", "Pérez", TiposDatos.Rol.CAPITAN);
+        int idxCat = cmbCategoria.getSelectedIndex();
+        if (idxCat < 0 || idxCat >= categoriasCargadas.size()) {
+            JOptionPane.showMessageDialog(this, "Debe seleccionar una categoría deportiva válida.", "Categoría requerida", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
 
-            // 2. Llamamos al Controlador para que valide las reglas de negocio del alta
-            String respuesta = gestorEquipos.registrarEquipo(nombre, categoriaObj, color, sedeSimulada, capitanSimulado);
+        int idxCap = cmbCapitan.getSelectedIndex();
+        if (idxCap < 0 || idxCap >= capitanesCargados.size()) {
+            JOptionPane.showMessageDialog(this, "Debe seleccionar un capitán con cuenta de usuario registrada.", "Capitán requerido", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
 
-            // 3. Evaluamos la respuesta del Controlador (GestorEquipos)
-            if(respuesta.startsWith("ERROR")) {
-                JOptionPane.showMessageDialog(this, respuesta, "Error de validación", JOptionPane.ERROR_MESSAGE);
-            } else {
-                JOptionPane.showMessageDialog(this, respuesta, "Operación Exitosa", JOptionPane.INFORMATION_MESSAGE);
-                // Limpiamos los campos para una nueva carga
-                txtNombre.setText("");
-                txtColor.setText("");
-            }
+        Categoria categoriaObj = categoriasCargadas.get(idxCat);
+        Usuario capitanObj = capitanesCargados.get(idxCap);
 
-        } catch (com.gestionamateur.tpi.progav.modelo.TorneoExcepcion ex) {
-            // Si nuestros datos simulados rompieron las reglas del Modelo, lo atrapamos acá
-            JOptionPane.showMessageDialog(this, "Error en los datos de simulación: " + ex.getMessage(), "Error Crítico", JOptionPane.ERROR_MESSAGE);
+        String respuesta = gestorEquipos.registrarEquipo(nombre, categoriaObj, color, null, capitanObj, operador);
+
+        if (respuesta.startsWith("ERROR")) {
+            JOptionPane.showMessageDialog(this, respuesta, "Error al registrar", JOptionPane.ERROR_MESSAGE);
+        } else {
+            JOptionPane.showMessageDialog(this, respuesta, "Operación Exitosa", JOptionPane.INFORMATION_MESSAGE);
+            txtNombre.setText("");
+            txtColor.setText("");
         }
     }
 
     private void btnCancelarActionPerformed(java.awt.event.ActionEvent evt) {
-        this.dispose(); // Cierra esta ventana y vuelve a donde estaba
+        this.dispose();
     }
 
-    // Declaración de Variables
     private javax.swing.JButton btnCancelar;
     private javax.swing.JButton btnGuardar;
+    private javax.swing.JComboBox<String> cmbCapitan;
     private javax.swing.JComboBox<String> cmbCategoria;
+    private javax.swing.JLabel lblCapitan;
     private javax.swing.JLabel lblCategoria;
     private javax.swing.JLabel lblColor;
     private javax.swing.JLabel lblNombre;

@@ -12,31 +12,39 @@ public class Reclamo {
     private Date fechaInicio;
     private Date fechaFin;
     private String motivo;
-    private String estado;
+    private String estado = "PENDIENTE";
     private String veredicto;
     private String justificacion;
     private Sancion sancionApelada;
+    private Partido partido;
+    private Usuario capitan;
 
     // Constructor vacío (JPA)
-    public Reclamo() {}
+    public Reclamo() {
+        this.estado = "PENDIENTE";
+    }
 
     // 2. Constructor de inicio: Cuando nace el reclamo
     public Reclamo(Date fechaInicio, String motivo, Sancion sancionApelada) throws TorneoExcepcion {
         setFechaInicio(fechaInicio);
         setMotivo(motivo);
         this.sancionApelada = sancionApelada; // Puede ser nulo si es un reclamo general y no contra una sanción
+        this.estado = "PENDIENTE"; 
         
-        // Regla de Negocio: Todo reclamo nuevo nace en este estado
-        this.estado = "EN REVISIÓN"; 
-        
-        LOGGER.info("Se ha abierto un nuevo expediente de Reclamo (Estado: EN REVISIÓN).");
+        LOGGER.info("Se ha abierto un nuevo expediente de Reclamo (Estado: PENDIENTE).");
+    }
+
+    public Reclamo(Date fechaInicio, String motivo, Sancion sancionApelada, Partido partido, Usuario capitan) throws TorneoExcepcion {
+        this(fechaInicio, motivo, sancionApelada);
+        this.partido = partido;
+        this.capitan = capitan;
     }
 
     // --- COMPORTAMIENTO DE DOMINIO RICO ---
     
     // Método que controla el ciclo de vida del reclamo
     public void resolverReclamo(Date fechaFin, String veredicto, String justificacion) throws TorneoExcepcion {
-        if (this.estado.equalsIgnoreCase("RESUELTO")) {
+        if ("RESUELTO".equalsIgnoreCase(this.estado)) {
             LOGGER.warning("Validación fallida: Intento de volver a resolver un reclamo ya cerrado.");
             throw new TorneoExcepcion("Este reclamo ya cuenta con un veredicto y se encuentra cerrado.");
         }
@@ -90,12 +98,15 @@ public class Reclamo {
     
     public String getEstado() { return estado; }
     
-    // Uso interno, pero lo protegemos
     public void setEstado(String estado) throws TorneoExcepcion { 
         if (estado == null || estado.trim().isEmpty()) {
             throw new TorneoExcepcion("El estado del expediente no puede quedar en blanco.");
         }
-        this.estado = estado; 
+        String normalizado = estado.trim().toUpperCase();
+        if (!normalizado.equals("PENDIENTE") && !normalizado.equals("RESUELTO")) {
+            throw new TorneoExcepcion("Estado de reclamo inválido: debe ser PENDIENTE o RESUELTO.");
+        }
+        this.estado = normalizado; 
     }
     
     public String getVeredicto() { return veredicto; }
@@ -118,4 +129,10 @@ public class Reclamo {
     
     public Sancion getSancionApelada() { return sancionApelada; } 
     public void setSancionApelada(Sancion sancionApelada) { this.sancionApelada = sancionApelada; }
+
+    public Partido getPartido() { return partido; }
+    public void setPartido(Partido partido) { this.partido = partido; }
+
+    public Usuario getCapitan() { return capitan; }
+    public void setCapitan(Usuario capitan) { this.capitan = capitan; }
 }

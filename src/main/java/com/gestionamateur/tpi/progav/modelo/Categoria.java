@@ -11,20 +11,25 @@ public class Categoria {
     private String nombre;
     private String genero;
     private int edadMinima;
-    private int edadMaxima;
+    private Integer edadMaxima; // Rectificación INF-03R: Nullable para categorías abiertas (Libre, Senior)
 
     // Constructor vacío (JPA)
     public Categoria() {}
 
-    // 2. Constructor que delega en los setters y hace validación cruzada
+    // Constructor original retrocompatible
     public Categoria(String nombre, String genero, int edadMinima, int edadMaxima) throws TorneoExcepcion {
+        this(nombre, genero, edadMinima, Integer.valueOf(edadMaxima));
+    }
+
+    // 2. Constructor rectificado INF-03R: Admite edadMaxima null
+    public Categoria(String nombre, String genero, int edadMinima, Integer edadMaxima) throws TorneoExcepcion {
         setNombre(nombre);
         setGenero(genero);
         setEdadMinima(edadMinima);
         setEdadMaxima(edadMaxima);
         
-        // Validación cruzada de negocio
-        if (this.edadMinima > this.edadMaxima) {
+        // Validación cruzada de negocio cuando edadMaxima no es nula
+        if (this.edadMaxima != null && this.edadMinima > this.edadMaxima) {
             LOGGER.warning("Incoherencia lógica: Rango de edades inválido al crear categoría " + this.nombre);
             throw new TorneoExcepcion("La edad mínima (" + this.edadMinima + ") no puede ser mayor que la edad máxima (" + this.edadMaxima + ").");
         }
@@ -58,19 +63,19 @@ public class Categoria {
     public int getEdadMinima() { return edadMinima; }
     
     public void setEdadMinima(int edadMinima) throws TorneoExcepcion { 
-        if (edadMinima < 0) {
-            LOGGER.warning("Validación fallida: Se ingresó una edad mínima negativa.");
-            throw new TorneoExcepcion("La edad mínima no puede ser menor a 0.");
+        if (edadMinima <= 0) {
+            LOGGER.warning("Validación fallida: Se ingresó una edad mínima menor o igual a cero.");
+            throw new TorneoExcepcion("La edad mínima debe ser mayor a 0.");
         }
         this.edadMinima = edadMinima; 
     }
     
-    public int getEdadMaxima() { return edadMaxima; }
+    public Integer getEdadMaxima() { return edadMaxima; }
     
-    public void setEdadMaxima(int edadMaxima) throws TorneoExcepcion { 
-        if (edadMaxima < 0) {
-            LOGGER.warning("Validación fallida: Se ingresó una edad máxima negativa.");
-            throw new TorneoExcepcion("La edad máxima no puede ser un número negativo.");
+    public void setEdadMaxima(Integer edadMaxima) throws TorneoExcepcion { 
+        if (edadMaxima != null && edadMaxima <= 0) {
+            LOGGER.warning("Validación fallida: Se ingresó una edad máxima no positiva.");
+            throw new TorneoExcepcion("La edad máxima debe ser mayor a 0 cuando se especifica.");
         }
         this.edadMaxima = edadMaxima; 
     }

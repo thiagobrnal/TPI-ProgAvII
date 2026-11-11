@@ -9,24 +9,37 @@ public class Partido {
     private static final Logger LOGGER = Logger.getLogger(Partido.class.getName());
 
     private Long idPartido;
+    private Long idFase;
     private Date fechaHora;
+    private Date fechaHoraFinalizacionReal;
+    private int duracionPartidoMinutos = 90;
     private TiposDatos.EstadoPartido estadoPartido;
     private Arbitro arbitroDesignado;
     private Cancha sede;
     private Motivo motivoSuspension;
 
     // Constructor vacío (JPA)
-    public Partido() {}
+    public Partido() {
+        this.duracionPartidoMinutos = 90;
+        this.estadoPartido = TiposDatos.EstadoPartido.PROGRAMADO;
+    }
 
     // 2. Constructor completo: Un partido nace en estado PROGRAMADO
     public Partido(Date fechaHora, Cancha sede) throws TorneoExcepcion {
         setFechaHora(fechaHora);
         setSede(sede);
+        this.duracionPartidoMinutos = 90;
         
         // Estado inicial por defecto
         this.estadoPartido = TiposDatos.EstadoPartido.PROGRAMADO;
         
         LOGGER.info("Se ha programado un nuevo partido para la fecha: " + this.fechaHora);
+    }
+
+    public Partido(Long idFase, Date fechaHora, Cancha sede, int duracionPartidoMinutos) throws TorneoExcepcion {
+        this(fechaHora, sede);
+        this.idFase = idFase;
+        setDuracionPartidoMinutos(duracionPartidoMinutos);
     }
     
     // --- MÉTODOS DE DOMINIO RICO (Comportamiento) ---
@@ -51,10 +64,24 @@ public class Partido {
         LOGGER.info("El partido ha sido POSTERGADO. Motivo asignado.");
     }
 
+    public void suspenderPartido(Motivo motivo) throws TorneoExcepcion {
+        if (motivo == null) {
+            LOGGER.warning("Validación fallida: Intento de suspender un partido sin justificación formal.");
+            throw new TorneoExcepcion("Para suspender un partido es obligatorio adjuntar un Motivo formal.");
+        }
+        
+        this.estadoPartido = TiposDatos.EstadoPartido.SUSPENDIDO;
+        this.motivoSuspension = motivo;
+        LOGGER.info("El partido ha sido SUSPENDIDO. Motivo asignado.");
+    }
+
     // --- GETTERS Y SETTERS BLINDADOS ---
 
     public Long getIdPartido() { return idPartido; }
     public void setIdPartido(Long idPartido) { this.idPartido = idPartido; }
+
+    public Long getIdFase() { return idFase; }
+    public void setIdFase(Long idFase) { this.idFase = idFase; }
     
     public Date getFechaHora() { return fechaHora; }
     
@@ -65,10 +92,23 @@ public class Partido {
         }
         this.fechaHora = fechaHora; 
     }
+
+    public Date getFechaHoraFinalizacionReal() { return fechaHoraFinalizacionReal; }
+    
+    public void setFechaHoraFinalizacionReal(Date fechaHoraFinalizacionReal) {
+        this.fechaHoraFinalizacionReal = fechaHoraFinalizacionReal;
+    }
+
+    public int getDuracionPartidoMinutos() { return duracionPartidoMinutos; }
+    public void setDuracionPartidoMinutos(int duracionPartidoMinutos) throws TorneoExcepcion {
+        if (duracionPartidoMinutos <= 0) {
+            throw new TorneoExcepcion("La duración del partido debe ser un valor positivo en minutos.");
+        }
+        this.duracionPartidoMinutos = duracionPartidoMinutos;
+    }
     
     public TiposDatos.EstadoPartido getEstadoPartido() { return estadoPartido; }
     
-    // Este setter suele ser de uso interno, pero lo validamos igual
     public void setEstadoPartido(TiposDatos.EstadoPartido estadoPartido) throws TorneoExcepcion { 
         if (estadoPartido == null) {
             LOGGER.severe("Error Crítico: Intento de dejar un partido sin estado.");
@@ -97,7 +137,7 @@ public class Partido {
         }
         this.sede = sede; 
     }
-    
-    public Motivo getMotivoSuspension() { return motivoSuspension; } 
+
+    public Motivo getMotivoSuspension() { return motivoSuspension; }
     public void setMotivoSuspension(Motivo motivoSuspension) { this.motivoSuspension = motivoSuspension; }
 }

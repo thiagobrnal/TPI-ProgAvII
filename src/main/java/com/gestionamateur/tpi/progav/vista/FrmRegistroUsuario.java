@@ -1,6 +1,5 @@
 package com.gestionamateur.tpi.progav.vista;
 
-// Importaciones actualizadas a la nueva ruta
 import com.gestionamateur.tpi.progav.controlador.GestorUsuarios;
 import com.gestionamateur.tpi.progav.modelo.TiposDatos;
 import javax.swing.JOptionPane;
@@ -8,15 +7,38 @@ import javax.swing.JOptionPane;
 public class FrmRegistroUsuario extends javax.swing.JFrame {
 
     private GestorUsuarios gestorUsuarios;
+    private boolean esBootstrap;
 
     public FrmRegistroUsuario() {
         initComponents();
-        this.setLocationRelativeTo(null); // Centra la ventana
-        gestorUsuarios = new GestorUsuarios();
-        
-        // Cargamos los roles dinámicamente desde el Enum para el ComboBox
-        for (TiposDatos.Rol rol : TiposDatos.Rol.values()) {
-            cmbRol.addItem(rol.toString());
+        this.setLocationRelativeTo(null);
+        this.gestorUsuarios = new GestorUsuarios();
+        this.esBootstrap = !gestorUsuarios.esSistemaInicializado();
+        configurarVistaSegunModo();
+    }
+
+    public FrmRegistroUsuario(boolean forzarBootstrap) {
+        initComponents();
+        this.setLocationRelativeTo(null);
+        this.gestorUsuarios = new GestorUsuarios();
+        this.esBootstrap = forzarBootstrap;
+        configurarVistaSegunModo();
+    }
+
+    private void configurarVistaSegunModo() {
+        cmbRol.removeAllItems();
+        if (esBootstrap) {
+            setTitle("Inicialización del Sistema - Primer Administrador");
+            lblTitulo.setText("Crear Primer Administrador");
+            cmbRol.addItem(TiposDatos.Rol.ADMINISTRADOR.name());
+            cmbRol.setEnabled(false);
+            btnRegistrar.setText("Inicializar Administrador");
+        } else {
+            setTitle("Registro de Nuevo Usuario");
+            // Cierre estricto: PUBLICO es anónimo sin cuenta; solo se permite autorregistro de CAPITAN
+            cmbRol.addItem(TiposDatos.Rol.CAPITAN.name());
+            cmbRol.setEnabled(false);
+            btnRegistrar.setText("Registrar Cuenta");
         }
     }
 
@@ -66,7 +88,6 @@ public class FrmRegistroUsuario extends javax.swing.JFrame {
             }
         });
 
-        // --- Layout generado para mantener el orden ---
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
         getContentPane().setLayout(layout);
         layout.setHorizontalGroup(
@@ -137,41 +158,49 @@ public class FrmRegistroUsuario extends javax.swing.JFrame {
         pack();
     }
 
-    // --- CONEXIÓN CON EL CONTROLADOR ---
     private void btnRegistrarActionPerformed(java.awt.event.ActionEvent evt) {
-        
         String usuario = txtUsuario.getText();
         String pass = new String(txtContrasenia.getPassword());
         String mail = txtMail.getText();
         String nombre = txtNombre.getText();
         String apellido = txtApellido.getText();
-        
-        // Recuperamos el Rol real desde el Enum usando el índice del ComboBox
-        int indexRol = cmbRol.getSelectedIndex();
-        TiposDatos.Rol rolSeleccionado = TiposDatos.Rol.values()[indexRol];
 
-        // Validaciones súper básicas de la vista para no molestar al Gestor por nada
-        if(usuario.trim().isEmpty() || pass.trim().isEmpty() || mail.trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Complete los campos obligatorios.", "Atención", JOptionPane.WARNING_MESSAGE);
+        if (usuario.trim().isEmpty() || pass.trim().isEmpty() || mail.trim().isEmpty()
+                || nombre.trim().isEmpty() || apellido.trim().isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Complete todos los campos obligatorios.", "Atención", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        // Llamamos al Gestor (que a su vez intentará instanciar el Modelo blindado)
-        String respuesta = gestorUsuarios.registrarUsuario(usuario, pass, mail, nombre, apellido, rolSeleccionado);
-
-        if(respuesta.startsWith("ERROR")) {
-            JOptionPane.showMessageDialog(this, respuesta, "Error al crear cuenta", JOptionPane.ERROR_MESSAGE);
+        String respuesta;
+        if (esBootstrap) {
+            respuesta = gestorUsuarios.inicializarPrimerAdministrador(usuario, pass, mail, nombre, apellido);
         } else {
-            JOptionPane.showMessageDialog(this, respuesta, "Registro Exitoso", JOptionPane.INFORMATION_MESSAGE);
-            this.dispose(); // Cierra la ventana y vuelve al Login
+            String rolStr = (String) cmbRol.getSelectedItem();
+            TiposDatos.Rol rolSeleccionado;
+            try {
+                rolSeleccionado = TiposDatos.Rol.valueOf(rolStr);
+            } catch (Exception e) {
+                rolSeleccionado = TiposDatos.Rol.CAPITAN;
+            }
+            respuesta = gestorUsuarios.registrarUsuarioPublico(usuario, pass, mail, nombre, apellido, rolSeleccionado);
+        }
+
+        if (respuesta.startsWith("ERROR")) {
+            JOptionPane.showMessageDialog(this, respuesta, "Error al registrar", JOptionPane.ERROR_MESSAGE);
+        } else {
+            JOptionPane.showMessageDialog(this, respuesta, "Operación Exitosa", JOptionPane.INFORMATION_MESSAGE);
+            this.dispose();
         }
     }
 
     private void btnCancelarActionPerformed(java.awt.event.ActionEvent evt) {
-        this.dispose(); // Solo cierra esta ventana
+        this.dispose();
     }
 
-    // Variables
+    public boolean isModoBootstrap() {
+        return esBootstrap;
+    }
+
     private javax.swing.JButton btnCancelar;
     private javax.swing.JButton btnRegistrar;
     private javax.swing.JComboBox<String> cmbRol;

@@ -1,8 +1,7 @@
 package com.gestionamateur.tpi.progav.vista;
 
-// Agregamos las importaciones con la nueva ruta de paquetes
-import com.gestionamateur.tpi.progav.modelo.Usuario;
 import com.gestionamateur.tpi.progav.modelo.TiposDatos;
+import com.gestionamateur.tpi.progav.modelo.Usuario;
 
 public class FrmPrincipal extends javax.swing.JFrame {
 
@@ -13,18 +12,32 @@ public class FrmPrincipal extends javax.swing.JFrame {
         this.usuarioActual = usuario;
         initComponents();
         this.setLocationRelativeTo(null);
-        
-        // Modificación dinámica de la GUI aprovechando el Dominio Rico
-        lblBienvenida.setText("Usuario: " + usuario.getNombre() + " | Rol: " + usuario.getRol().toString());
-        
-        // Lógica de Permisos: Encapsular funcionalidad según rol
-        if(usuario.getRol() == TiposDatos.Rol.ARBITRO) {
-            btnGestionarEquipos.setEnabled(false); // Un árbitro no da de alta equipos
-            btnAltaJugadores.setEnabled(false);    // Tampoco da de alta jugadores
-            btnGestionarCanchas.setEnabled(false); // Un árbitro no gestiona canchas
-        } else if (usuario.getRol() == TiposDatos.Rol.CAPITAN) {
-            btnProgramarPartidos.setEnabled(false); // Un capitán no puede programar el fixture
-            btnGestionarCanchas.setEnabled(false); // Un capitán no gestiona canchas
+
+        // Modificación dinámica de la GUI según el Rol
+        if (usuario != null && usuario.getRol() != null) {
+            lblBienvenida.setText("Usuario: " + usuario.getNombre() + " | Rol: " + usuario.getRol().toString());
+
+            // Lógica de Permisos: Encapsular funcionalidad según rol
+            if (usuario.getRol() == TiposDatos.Rol.PUBLICO) {
+                btnGestionarEquipos.setEnabled(false);
+                btnAltaJugadores.setEnabled(false);
+                btnGestionarCanchas.setEnabled(false);
+                btnProgramarPartidos.setEnabled(false);
+            } else if (usuario.getRol() == TiposDatos.Rol.ARBITRO) {
+                btnGestionarEquipos.setEnabled(false);
+                btnAltaJugadores.setEnabled(false);
+                btnGestionarCanchas.setEnabled(false);
+                btnProgramarPartidos.setEnabled(false);
+            } else if (usuario.getRol() == TiposDatos.Rol.CAPITAN) {
+                btnProgramarPartidos.setEnabled(false);
+                btnGestionarCanchas.setEnabled(false);
+            }
+        } else {
+            lblBienvenida.setText("Usuario: Invitado (Acceso Público de Solo Lectura)");
+            btnGestionarEquipos.setEnabled(false);
+            btnAltaJugadores.setEnabled(false);
+            btnGestionarCanchas.setEnabled(false);
+            btnProgramarPartidos.setEnabled(false);
         }
     }
 
@@ -41,20 +54,21 @@ public class FrmPrincipal extends javax.swing.JFrame {
         lblBienvenida = new javax.swing.JLabel();
         btnGestionarEquipos = new javax.swing.JButton();
         btnAltaJugadores = new javax.swing.JButton();
-        btnGestionarCanchas = new javax.swing.JButton(); // Instanciamos el nuevo botón
+        btnGestionarCanchas = new javax.swing.JButton();
         btnProgramarPartidos = new javax.swing.JButton();
         btnCerrarSesion = new javax.swing.JButton();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
         setTitle("Menú Principal - Torneo Fútbol");
 
-        lblTitulo.setFont(new java.awt.Font("Segoe UI", 1, 24)); 
+        lblTitulo.setFont(new java.awt.Font("Segoe UI", 1, 24));
         lblTitulo.setText("Panel de Control");
 
         lblBienvenida.setText("Usuario: Invitado");
 
         btnGestionarEquipos.setText("Gestionar Equipos (Alta)");
         btnGestionarEquipos.addActionListener(new java.awt.event.ActionListener() {
+            @Override
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 btnGestionarEquiposActionPerformed(evt);
             }
@@ -62,13 +76,15 @@ public class FrmPrincipal extends javax.swing.JFrame {
 
         btnAltaJugadores.setText("Dar de Alta Jugadores");
         btnAltaJugadores.addActionListener(new java.awt.event.ActionListener() {
+            @Override
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 btnAltaJugadoresActionPerformed(evt);
             }
         });
 
-        btnGestionarCanchas.setText("Gestionar Sedes / Canchas"); // Configuración del nuevo botón
+        btnGestionarCanchas.setText("Gestionar Sedes / Canchas");
         btnGestionarCanchas.addActionListener(new java.awt.event.ActionListener() {
+            @Override
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 btnGestionarCanchasActionPerformed(evt);
             }
@@ -76,6 +92,7 @@ public class FrmPrincipal extends javax.swing.JFrame {
 
         btnProgramarPartidos.setText("Programar Partidos");
         btnProgramarPartidos.addActionListener(new java.awt.event.ActionListener() {
+            @Override
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 btnProgramarPartidosActionPerformed(evt);
             }
@@ -83,6 +100,7 @@ public class FrmPrincipal extends javax.swing.JFrame {
 
         btnCerrarSesion.setText("Cerrar Sesión");
         btnCerrarSesion.addActionListener(new java.awt.event.ActionListener() {
+            @Override
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 btnCerrarSesionActionPerformed(evt);
             }
@@ -132,31 +150,29 @@ public class FrmPrincipal extends javax.swing.JFrame {
     }
 
     private void btnGestionarEquiposActionPerformed(java.awt.event.ActionEvent evt) {
-        // Interacción entre ventanas: Llamada a la interfaz ya construida
-        FrmAltaEquipo ventanaEquipos = new FrmAltaEquipo();
+        FrmAltaEquipo ventanaEquipos = new FrmAltaEquipo(usuarioActual);
         ventanaEquipos.setVisible(true);
     }
 
     private void btnAltaJugadoresActionPerformed(java.awt.event.ActionEvent evt) {
-        // Llamada a la nueva vista de jugadores
-        FrmAltaJugador ventanaJugadores = new FrmAltaJugador();
+        FrmAltaJugador ventanaJugadores = new FrmAltaJugador(usuarioActual);
         ventanaJugadores.setVisible(true);
     }
 
     private void btnGestionarCanchasActionPerformed(java.awt.event.ActionEvent evt) {
-        // Llamada a la nueva vista de canchas
-        FrmAltaCancha ventanaCanchas = new FrmAltaCancha();
+        FrmAltaCancha ventanaCanchas = new FrmAltaCancha(usuarioActual);
         ventanaCanchas.setVisible(true);
     }
 
     private void btnProgramarPartidosActionPerformed(java.awt.event.ActionEvent evt) {
-        javax.swing.JOptionPane.showMessageDialog(this, "Módulo en construcción para el próximo sprint.");
+        FrmProgramarPartido ventanaPartidos = new FrmProgramarPartido(usuarioActual);
+        ventanaPartidos.setVisible(true);
     }
 
     private void btnCerrarSesionActionPerformed(java.awt.event.ActionEvent evt) {
         FrmLogin login = new FrmLogin();
         login.setVisible(true);
-        this.dispose(); // Libera los recursos asociados a la ventana actual (Dispose_On_Close)
+        this.dispose();
     }
 
     private javax.swing.JButton btnAltaJugadores;

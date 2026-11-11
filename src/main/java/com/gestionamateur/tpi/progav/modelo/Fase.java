@@ -10,20 +10,30 @@ public class Fase {
     private Long id;
     private String nombre;
     private int orden;
+    private boolean limpiaAmarillas = false;
 
     // Constructor vacío (JPA)
     public Fase() {}
     
-    // 2. Constructor completo que delega en los setters blindados
+    // 2. Constructor original que delega en los setters blindados
     public Fase(String nombre, int orden) throws TorneoExcepcion {
+        this(nombre, orden, false);
+    }
+
+    // Constructor completo con soporte para limpieza de amarillas en playoffs (INF-03)
+    public Fase(String nombre, int orden, boolean limpiaAmarillas) throws TorneoExcepcion {
         setNombre(nombre);
         setOrden(orden);
+        setLimpiaAmarillas(limpiaAmarillas);
         
-        LOGGER.info("Se ha instanciado correctamente la fase: " + this.nombre + " (Orden de juego: " + this.orden + ")");
+        LOGGER.info("Se ha instanciado correctamente la fase: " + this.nombre + " (Orden de juego: " + this.orden + ", Limpia amarillas: " + this.limpiaAmarillas + ")");
     }
 
     public Long getId() { return id; } 
     public void setId(Long id) { this.id = id; }
+
+    public Long getIdFase() { return id; }
+    public void setIdFase(Long idFase) { this.id = idFase; }
     
     public String getNombre() { return nombre; }
     
@@ -46,4 +56,7 @@ public class Fase {
         }
         this.orden = orden; 
     }
+
+    public boolean isLimpiaAmarillas() { return limpiaAmarillas; }
+    public void setLimpiaAmarillas(boolean limpiaAmarillas) { this.limpiaAmarillas = limpiaAmarillas; }
 }

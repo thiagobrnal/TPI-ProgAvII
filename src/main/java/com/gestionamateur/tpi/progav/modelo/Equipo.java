@@ -35,6 +35,10 @@ public class Equipo {
         LOGGER.info("Se ha instanciado y validado correctamente el equipo: " + this.nombre);
     }
 
+    public Equipo(String nombre, Categoria categoria, String colorCamiseta, Usuario capitan) throws TorneoExcepcion {
+        this(nombre, categoria, colorCamiseta, null, capitan);
+    }
+
     // 3. Comportamiento protegido (Cuidamos la lista del plantel)
     public void agregarJugador(Jugador j) throws TorneoExcepcion { 
         if (j == null) {
@@ -45,28 +49,31 @@ public class Equipo {
         LOGGER.info("Jugador agregado al plantel del equipo: " + this.nombre);
     }
 
-    public Long getIdEquipo() { return idEquipo; }
+    // --- GETTERS Y SETTERS BLINDADOS ---
+
+    public Long getIdEquipo() { return idEquipo; } 
     public void setIdEquipo(Long idEquipo) { this.idEquipo = idEquipo; }
     
     public String getNombre() { return nombre; }
     
+    // 4. Validaciones de negocio en atributos obligatorios
     public void setNombre(String nombre) throws TorneoExcepcion { 
         if (nombre == null || nombre.trim().isEmpty()) {
-            LOGGER.warning("Validación fallida: Se intentó crear un equipo sin nombre.");
-            throw new TorneoExcepcion("El nombre del equipo no puede estar vacío.");
+            LOGGER.warning("Validación fallida: Intento de registrar equipo sin nombre.");
+            throw new TorneoExcepcion("El nombre del equipo es obligatorio.");
         }
         this.nombre = nombre; 
     }
     
-    public String getAlias() { return alias; }
+    public String getAlias() { return alias; } 
     public void setAlias(String alias) { this.alias = alias; }
     
     public Categoria getCategoria() { return categoria; }
     
     public void setCategoria(Categoria categoria) throws TorneoExcepcion { 
         if (categoria == null) {
-            LOGGER.warning("Validación fallida: Equipo instanciado sin categoría asignada.");
-            throw new TorneoExcepcion("El equipo debe pertenecer obligatoriamente a una categoría válida.");
+            LOGGER.severe("Validación Crítica: Intento de crear un equipo sin asociarlo a una categoría.");
+            throw new TorneoExcepcion("Todo equipo debe pertenecer obligatoriamente a una Categoría deportiva.");
         }
         this.categoria = categoria; 
     }
@@ -92,12 +99,17 @@ public class Equipo {
     
     public void setCapitan(Usuario capitan) throws TorneoExcepcion { 
         if (capitan == null) {
-            LOGGER.warning("Validación fallida: Equipo inscripto sin capitán.");
-            throw new TorneoExcepcion("Todo equipo debe tener un usuario responsable o capitán asignado.");
+            LOGGER.severe("Validación Crítica: Equipo registrado sin un Capitán responsable.");
+            throw new TorneoExcepcion("El equipo debe tener asignado un Capitán responsable para las comunicaciones.");
         }
         this.capitan = capitan; 
     }
     
-    public List<Jugador> getPlantel() { return plantel; } 
-    public void setPlantel(List<Jugador> plantel) { this.plantel = plantel; }
+    public List<Jugador> getPlantel() { 
+        return new ArrayList<>(this.plantel); 
+    }
+
+    public void setPlantel(List<Jugador> plantel) {
+        this.plantel = plantel != null ? new ArrayList<>(plantel) : new ArrayList<>();
+    }
 }

@@ -1,5 +1,6 @@
 package com.gestionamateur.tpi.progav.modelo;
 
+import com.gestionamateur.tpi.progav.seguridad.BCrypt;
 import java.util.logging.Logger;
 
 public class Usuario {
@@ -14,9 +15,12 @@ public class Usuario {
     protected String nombre;
     protected String apellido;
     protected TiposDatos.Rol rol;
+    protected boolean activo = true;
 
-    // Constructor vacío (Obligatorio para JPA)
-    public Usuario() {}
+    // Constructor vacío
+    public Usuario() {
+        this.activo = true;
+    }
 
     // 2. Constructor completo: Nace delegando en los setters estrictos
     public Usuario(String usuario, String contraseña, String mail, String nombre, String apellido, TiposDatos.Rol rol) throws TorneoExcepcion {
@@ -26,6 +30,7 @@ public class Usuario {
         setNombre(nombre);
         setApellido(apellido);
         setRol(rol);
+        this.activo = true;
         
         LOGGER.info("Cuenta de usuario creada con éxito: " + this.usuario + " (Rol: " + this.rol.name() + ")");
     }
@@ -38,7 +43,14 @@ public class Usuario {
             return false;
         }
         
-        boolean accesoConcedido = this.usuario.equals(usr) && this.contraseña.equals(clave);
+        boolean accesoConcedido = false;
+        if (this.usuario != null && this.usuario.equalsIgnoreCase(usr)) {
+            if (this.contraseña != null && this.contraseña.startsWith("$2")) {
+                accesoConcedido = BCrypt.checkpw(clave, this.contraseña);
+            } else if (this.contraseña != null) {
+                accesoConcedido = this.contraseña.equals(clave);
+            }
+        }
         
         if (accesoConcedido) {
             LOGGER.info("Acceso concedido al sistema para el usuario: " + this.usuario);
@@ -67,6 +79,9 @@ public class Usuario {
         }
         this.usuario = usuario; 
     }
+
+    public String getNombreUsuario() { return usuario; }
+    public void setNombreUsuario(String nombreUsuario) throws TorneoExcepcion { setUsuario(nombreUsuario); }
     
     public String getContraseña() { return contraseña; }
     
@@ -80,6 +95,9 @@ public class Usuario {
         }
         this.contraseña = contraseña; 
     }
+
+    public String getClaveHash() { return contraseña; }
+    public void setClaveHash(String claveHash) throws TorneoExcepcion { setContraseña(claveHash); }
     
     public String getMail() { return mail; }
     
@@ -89,37 +107,38 @@ public class Usuario {
             throw new TorneoExcepcion("El correo electrónico es un dato obligatorio de contacto.");
         }
         if (!mail.contains("@") || !mail.contains(".")) {
-            LOGGER.warning("Validación fallida: Formato de correo electrónico inválido (" + mail + ").");
-            throw new TorneoExcepcion("El correo electrónico ingresado no tiene un formato válido (Ej: usuario@mail.com).");
+            throw new TorneoExcepcion("El formato del correo electrónico ingresado no es válido.");
         }
         this.mail = mail; 
     }
-    
+
     public String getNombre() { return nombre; }
     
     public void setNombre(String nombre) throws TorneoExcepcion { 
         if (nombre == null || nombre.trim().isEmpty()) {
-            throw new TorneoExcepcion("El nombre real de la persona es obligatorio.");
+            throw new TorneoExcepcion("El nombre de la persona no puede estar vacío.");
         }
         this.nombre = nombre; 
     }
-    
+
     public String getApellido() { return apellido; }
     
     public void setApellido(String apellido) throws TorneoExcepcion { 
         if (apellido == null || apellido.trim().isEmpty()) {
-            throw new TorneoExcepcion("El apellido de la persona es obligatorio.");
+            throw new TorneoExcepcion("El apellido de la persona no puede estar vacío.");
         }
         this.apellido = apellido; 
     }
-    
+
     public TiposDatos.Rol getRol() { return rol; }
     
     public void setRol(TiposDatos.Rol rol) throws TorneoExcepcion { 
         if (rol == null) {
-            LOGGER.severe("Validación de Seguridad fallida: Creación de usuario sin rol definido.");
-            throw new TorneoExcepcion("Es obligatorio asignar un Rol al usuario para definir sus permisos en el sistema.");
+            throw new TorneoExcepcion("Debe asignar un rol válido a la cuenta.");
         }
         this.rol = rol; 
     }
+
+    public boolean isActivo() { return activo; }
+    public void setActivo(boolean activo) { this.activo = activo; }
 }

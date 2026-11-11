@@ -1,52 +1,75 @@
 package com.gestionamateur.tpi.progav.controlador;
 
+import com.gestionamateur.tpi.progav.dao.EquipoDAO;
 import com.gestionamateur.tpi.progav.modelo.Cancha;
 import com.gestionamateur.tpi.progav.modelo.Categoria;
 import com.gestionamateur.tpi.progav.modelo.Equipo;
 import com.gestionamateur.tpi.progav.modelo.TorneoExcepcion;
 import com.gestionamateur.tpi.progav.modelo.Usuario;
+import com.gestionamateur.tpi.progav.servicio.EquipoService;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class GestorEquipos {
 
-    private static List<Equipo> dbEquipos = new ArrayList<>();
+    private static final Logger LOGGER = Logger.getLogger(GestorEquipos.class.getName());
+    private static final List<Equipo> dbEquipos = new ArrayList<>();
+    private final EquipoService equipoService = new EquipoService();
+    private final EquipoDAO equipoDAO = new EquipoDAO();
 
-    // CU 1: Gestionar Equipos (Alta)
+    public GestorEquipos() {
+    }
+
+    // CU 1: Gestionar Equipos (Alta con persistencia estricta)
     public String registrarEquipo(String nombre, Categoria categoria, String colorCamiseta, Cancha sede, Usuario capitan) {
-        
-        // 1. Validaciones previas de la capa Controlador
+        return registrarEquipo(nombre, categoria, colorCamiseta, sede, capitan, null);
+    }
+
+    public String registrarEquipo(String nombre, Categoria categoria, String colorCamiseta, Cancha sede, Usuario capitan, Usuario operador) {
         if (nombre == null || nombre.trim().isEmpty()) {
             return "ERROR: El nombre del equipo no puede estar vacío.";
         }
-
-        // Regla de Negocio del Controlador: Verificar disponibilidad de nombre en la misma categoría
-        for (Equipo e : dbEquipos) {
-            if (e.getNombre().equalsIgnoreCase(nombre) && e.getCategoria().getNombre().equals(categoria.getNombre())) {
-                return "ERROR: Ya existe un equipo llamado '" + nombre + "' en la categoría " + categoria.getNombre() + ".";
-            }
+        if (categoria == null || categoria.getId() == null) {
+            return "ERROR: Debe seleccionar una categoría válida.";
+        }
+        if (capitan == null || capitan.getId() == null) {
+            return "ERROR: Debe asignar un capitán con cuenta de usuario registrada.";
         }
 
-        // 2. Creación blindada usando el bloque Try-Catch
         try {
-            // Si algún dato es inválido (ej. color nulo o sin capitán), el constructor lanzará TorneoExcepcion
-            Equipo nuevoEquipo = new Equipo(nombre, categoria, colorCamiseta, sede, capitan);
-            
-            // Guardado (Simulando la persistencia en BD)
-            dbEquipos.add(nuevoEquipo);
-            
-            return "ÉXITO: El equipo '" + nombre + "' fue registrado correctamente.";
-            
-        } catch (TorneoExcepcion ex) {
-            // Si el Modelo rechaza los datos, atrapamos la excepción y devolvemos su mensaje
-            return "ERROR DE VALIDACIÓN: " + ex.getMessage();
+            Equipo eq = equipoService.registrarEquipo(nombre.trim(), null, categoria.getId(), colorCamiseta, sede, capitan.getId(), operador);
+            dbEquipos.add(eq);
+            return "ÉXITO: El equipo '" + nombre + "' fue registrado correctamente en la base de datos (ID: " + eq.getIdEquipo() + ").";
+        } catch (TorneoExcepcion te) {
+            return "ERROR DE VALIDACIÓN: " + te.getMessage();
         } catch (Exception e) {
-            // Capturamos cualquier otro error inesperado (NullPointer, etc.)
-            return "ERROR CRÍTICO: Ocurrió un problema inesperado al registrar el equipo (" + e.getMessage() + ").";
+            LOGGER.log(Level.SEVERE, "Fallo de persistencia JDBC al registrar equipo: " + e.getMessage());
+            // Sin fallback engañoso a memoria
+            return "ERROR DE CONEXIÓN: La base de datos no está disponible (" + e.getMessage() + "). No se guardaron cambios.";
+        }
+    }
+
+    public Equipo buscarEquipoDeCapitan(Long idCapitan) {
+        try {
+            return equipoDAO.buscarPorCapitan(idCapitan);
+        } catch (Exception e) {
+            LOGGER.warning("No se pudo buscar equipo del capitán: " + e.getMessage());
+            return null;
         }
     }
 
     public static List<Equipo> getEquiposRegistrados() {
+        try {
+            EquipoDAO dao = new EquipoDAO();
+            List<Equipo> listaBD = dao.buscarTodos();
+            if (listaBD != null && !listaBD.isEmpty()) {
+                return listaBD;
+            }
+        } catch (Exception e) {
+            LOGGER.warning("No se pudieron cargar equipos desde base de datos: " + e.getMessage());
+        }
         return dbEquipos;
     }
 }

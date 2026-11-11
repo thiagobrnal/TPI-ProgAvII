@@ -62,4 +62,14 @@ public class TiposDatos {
         TipoAccion(String descripcion) { this.descripcion = descripcion; }
         @Override public String toString() { return descripcion; }
     }
+
+    public enum TipoExpulsion {
+        DIRECTA("Roja Directa"),
+        DOBLE_AMARILLA("Doble Amonestación (Doble Amarilla)");
+
+        private final String descripcion;
+        
+        TipoExpulsion(String descripcion) { this.descripcion = descripcion; }
+        @Override public String toString() { return descripcion; }
+    }
 }

@@ -9,21 +9,30 @@ public class PartidoEquipo {
 
     private Long id;
     private boolean esLocal;
+    private int goles = 0;
     private Equipo equipo;
     private Partido partido;
 
     // Constructor vacío (Requisito estricto de JPA)
-    public PartidoEquipo() {}
+    public PartidoEquipo() {
+        this.goles = 0;
+    }
 
     // 2. Constructor completo delegando en setters blindados
     public PartidoEquipo(boolean esLocal, Equipo equipo, Partido partido) throws TorneoExcepcion {
         setEsLocal(esLocal);
         setEquipo(equipo);
         setPartido(partido);
+        this.goles = 0;
         
         // Log descriptivo usando el operador ternario para mostrar "Local" o "Visitante"
         String condicion = esLocal ? "Local" : "Visitante";
         LOGGER.info("Asignación de partido creada: El equipo " + equipo.getNombre() + " jugará de " + condicion);
+    }
+
+    public PartidoEquipo(boolean esLocal, int goles, Equipo equipo, Partido partido) throws TorneoExcepcion {
+        this(esLocal, equipo, partido);
+        setGoles(goles);
     }
 
     public Long getId() { return id; } 
@@ -33,6 +42,15 @@ public class PartidoEquipo {
     
     public void setEsLocal(boolean esLocal) { 
         this.esLocal = esLocal; 
+    }
+
+    public int getGoles() { return goles; }
+
+    public void setGoles(int goles) throws TorneoExcepcion {
+        if (goles < 0) {
+            throw new TorneoExcepcion("La cantidad de goles no puede ser negativa.");
+        }
+        this.goles = goles;
     }
     
     public Equipo getEquipo() { return equipo; } 
