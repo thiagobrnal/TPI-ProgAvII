@@ -79,6 +79,45 @@ public class TorneoDAO {
         return lista;
     }
 
+    public boolean existePorNombreExcluyendoId(Connection conn, String nombre, Long idTorneoExcluido) throws SQLException {
+        String sql = "SELECT COUNT(*) FROM torneos WHERE lower(nombre) = lower(?)"
+                   + (idTorneoExcluido != null ? " AND id_torneo <> ?" : "");
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, nombre);
+            if (idTorneoExcluido != null) {
+                ps.setLong(2, idTorneoExcluido);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() && rs.getInt(1) > 0;
+            }
+        }
+    }
+
+    public void actualizar(Connection conn, Torneo torneo) throws SQLException {
+        String sql = "UPDATE torneos SET nombre = ?, formato = ?, cupo_equipos = ?, fecha_inicio = ? WHERE id_torneo = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, torneo.getNombre());
+            ps.setString(2, torneo.getFormato().name());
+            ps.setInt(3, torneo.getCupoEquipos());
+            ps.setDate(4, new Date(torneo.getFechaInicio().getTime()));
+            ps.setLong(5, torneo.getIdTorneo());
+            int filas = ps.executeUpdate();
+            if (filas != 1) {
+                throw new SQLException("No se encontró el torneo ID " + torneo.getIdTorneo() + " para actualizar.");
+            }
+        }
+    }
+
+    public int contarPartidosDeTorneo(Connection conn, Long idTorneo) throws SQLException {
+        String sql = "SELECT COUNT(*) FROM partidos p JOIN fases f ON p.id_fase = f.id_fase WHERE f.id_torneo = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, idTorneo);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        }
+    }
+
     public void actualizarEstado(Connection conn, Long idTorneo, String nuevoEstado) throws SQLException {
         String sql = "UPDATE torneos SET estado = ? WHERE id_torneo = ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {

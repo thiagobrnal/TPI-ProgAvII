@@ -2,6 +2,8 @@ package com.gestionamateur.tpi.progav.servicio;
 
 import com.gestionamateur.tpi.progav.dao.ReporteDAO;
 import com.gestionamateur.tpi.progav.modelo.TorneoExcepcion;
+import com.gestionamateur.tpi.progav.modelo.Usuario;
+import com.gestionamateur.tpi.progav.seguridad.PoliticaPermisos;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -31,6 +33,12 @@ public class ReporteService {
 
     public ReporteService(ReporteDAO reporteDAO) {
         this.reporteDAO = reporteDAO;
+    }
+
+    private void validarOperadorReportes(Usuario operador) throws TorneoExcepcion {
+        if (!PoliticaPermisos.tienePermisoOperacion(operador, PoliticaPermisos.ModuloMenu.REPORTES)) {
+            throw new TorneoExcepcion("Acceso denegado: solo ADMINISTRADOR u ORGANIZADOR autenticados pueden consultar reportes.");
+        }
     }
 
     /**
@@ -74,12 +82,17 @@ public class ReporteService {
         "Equipo", "PJ", "PG", "PE", "PP", "GF", "GC", "DG", "Puntos"
     };
 
+    public TablaReporte obtenerTablaPosiciones() throws TorneoExcepcion {
+        return obtenerTablaPosiciones(null);
+    }
+
     /**
      * Tabla de posiciones del torneo: solo partidos finalizados, con victoria de
      * 3 puntos, empate de 1 y derrota de 0. Orden: puntos, diferencia de goles,
      * goles a favor y nombre del equipo.
      */
-    public TablaReporte obtenerTablaPosiciones() throws TorneoExcepcion {
+    public TablaReporte obtenerTablaPosiciones(Usuario operador) throws TorneoExcepcion {
+        validarOperadorReportes(operador);
         try (Connection conn = ConexionBD.obtenerConexion()) {
             List<Object[]> filas = reporteDAO.tablaPosiciones(conn);
             return new TablaReporte("Tabla de posiciones (CU-19)", COLUMNAS_POSICIONES, filas);
@@ -97,11 +110,16 @@ public class ReporteService {
         "Jugador", "Equipo", "Goles", "Tarjetas amarillas", "Tarjetas rojas", "Sanciones vigentes"
     };
 
+    public TablaReporte obtenerReporteJugadores() throws TorneoExcepcion {
+        return obtenerReporteJugadores(null);
+    }
+
     /**
      * Reporte de jugadores: goleadores, tarjetas amarillas, tarjetas rojas y
      * sanciones vigentes por jugador.
      */
-    public TablaReporte obtenerReporteJugadores() throws TorneoExcepcion {
+    public TablaReporte obtenerReporteJugadores(Usuario operador) throws TorneoExcepcion {
+        validarOperadorReportes(operador);
         try (Connection conn = ConexionBD.obtenerConexion()) {
             List<Object[]> filas = reporteDAO.reporteJugadores(conn);
             return new TablaReporte("Reporte de jugadores (CU-20)", COLUMNAS_JUGADORES, filas);
@@ -123,11 +141,16 @@ public class ReporteService {
         "Jugador", "Equipo", "Partidos", "Goles", "Tarjetas amarillas", "Tarjetas rojas", "Sanciones vigentes"
     };
 
+    public TablaReporte obtenerHistorialEquipos() throws TorneoExcepcion {
+        return obtenerHistorialEquipos(null);
+    }
+
     /**
      * Historial deportivo por equipo: torneos en los que participó, partidos
      * jugados, ganados, empatados, perdidos y goles a favor y en contra.
      */
-    public TablaReporte obtenerHistorialEquipos() throws TorneoExcepcion {
+    public TablaReporte obtenerHistorialEquipos(Usuario operador) throws TorneoExcepcion {
+        validarOperadorReportes(operador);
         try (Connection conn = ConexionBD.obtenerConexion()) {
             List<Object[]> filas = reporteDAO.historialEquipos(conn);
             return new TablaReporte("Historial deportivo por equipo (CU-21)", COLUMNAS_HISTORIAL_EQUIPOS, filas);
@@ -137,11 +160,16 @@ public class ReporteService {
         }
     }
 
+    public TablaReporte obtenerHistorialJugadores() throws TorneoExcepcion {
+        return obtenerHistorialJugadores(null);
+    }
+
     /**
      * Historial deportivo por jugador: equipo, partidos, goles, tarjetas y
      * sanciones vigentes.
      */
-    public TablaReporte obtenerHistorialJugadores() throws TorneoExcepcion {
+    public TablaReporte obtenerHistorialJugadores(Usuario operador) throws TorneoExcepcion {
+        validarOperadorReportes(operador);
         try (Connection conn = ConexionBD.obtenerConexion()) {
             List<Object[]> filas = reporteDAO.historialJugadores(conn);
             return new TablaReporte("Historial deportivo por jugador (CU-21)", COLUMNAS_HISTORIAL_JUGADORES, filas);
@@ -159,11 +187,16 @@ public class ReporteService {
         "Árbitro", "Categoría arbitral", "Partidos dirigidos", "Incidencias registradas"
     };
 
+    public TablaReporte obtenerReporteArbitros() throws TorneoExcepcion {
+        return obtenerReporteArbitros(null);
+    }
+
     /**
      * Reporte de árbitros: partidos dirigidos e incidencias registradas.
      * Incluye también a los árbitros que no tienen partidos asignados.
      */
-    public TablaReporte obtenerReporteArbitros() throws TorneoExcepcion {
+    public TablaReporte obtenerReporteArbitros(Usuario operador) throws TorneoExcepcion {
+        validarOperadorReportes(operador);
         try (Connection conn = ConexionBD.obtenerConexion()) {
             List<Object[]> filas = reporteDAO.reporteArbitros(conn);
             return new TablaReporte("Reporte de árbitros (CU-22)", COLUMNAS_ARBITROS, filas);
@@ -173,6 +206,10 @@ public class ReporteService {
         }
     }
 
+    public List<TablaReporte> obtenerTodosLosReportes() throws TorneoExcepcion {
+        return obtenerTodosLosReportes(null);
+    }
+
     /**
      * Devuelve los cuatro reportes en un solo lote, reutilizando una misma
      * conexion. Se usa desde la vista para refrescar todas las pestañas.
@@ -180,7 +217,8 @@ public class ReporteService {
      * @return lista de reportes en el orden: posiciones, jugadores,
      *         historial por equipo, historial por jugador y árbitros.
      */
-    public List<TablaReporte> obtenerTodosLosReportes() throws TorneoExcepcion {
+    public List<TablaReporte> obtenerTodosLosReportes(Usuario operador) throws TorneoExcepcion {
+        validarOperadorReportes(operador);
         List<TablaReporte> reportes = new ArrayList<>();
         try (Connection conn = ConexionBD.obtenerConexion()) {
             reportes.add(new TablaReporte("Tabla de posiciones (CU-19)", COLUMNAS_POSICIONES,

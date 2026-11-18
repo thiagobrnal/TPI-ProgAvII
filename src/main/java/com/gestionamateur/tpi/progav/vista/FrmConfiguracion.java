@@ -1,25 +1,22 @@
 package com.gestionamateur.tpi.progav.vista;
 
-import com.gestionamateur.tpi.progav.dao.ConfiguracionDAO;
-import com.gestionamateur.tpi.progav.modelo.TiposDatos;
+import com.gestionamateur.tpi.progav.modelo.TorneoExcepcion;
 import com.gestionamateur.tpi.progav.modelo.Usuario;
+import com.gestionamateur.tpi.progav.seguridad.PoliticaPermisos;
+import com.gestionamateur.tpi.progav.servicio.ConfiguracionService;
 
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import javax.swing.BorderFactory;
 import javax.swing.JButton;
+import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -27,8 +24,9 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
-import javax.swing.ListSelectionModel;
+import javax.swing.SwingConstants;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableColumnModel;
 
 /**
  * CU-18: Gestion de la configuracion general del sistema (actor: Administrador).
@@ -36,14 +34,14 @@ import javax.swing.table.DefaultTableModel;
  * Permite consultar los parametros globales almacenados en la tabla 'configuraciones'
  * (clave, valor y descripcion) y modificar el valor de un parametro existente.
  *
- * La persistencia se delega en {@link ConfiguracionDAO#actualizarValorInt(String, int)}.
+ * La consulta y persistencia se delegan en {@link ConfiguracionService}.
  * Los valores admitidos son enteros no negativos: un valor negativo o no numerico
  * se rechaza con un mensaje claro y no se escribe nada en la base de datos.
  */
 public class FrmConfiguracion extends JFrame {
 
     private final Usuario operador;
-    private final ConfiguracionDAO configuracionDAO = new ConfiguracionDAO();
+    private final ConfiguracionService configuracionService = new ConfiguracionService();
 
     private final Map<String, Integer> valores = new LinkedHashMap<>();
     private final Map<String, String> descripciones = new LinkedHashMap<>();
@@ -59,6 +57,8 @@ public class FrmConfiguracion extends JFrame {
     private final JTable tablaConfiguracion = new JTable(modeloTabla);
     private final JLabel lblInfo = new JLabel(" ");
     private final JLabel lblSeleccion = new JLabel(" ");
+    private final JButton btnActualizar = new JButton("Actualizar listado");
+    private final JButton btnEditar = new JButton("Editar valor (seleccionado)");
 
     public FrmConfiguracion(Usuario operador) {
         this.operador = operador;
@@ -70,84 +70,103 @@ public class FrmConfiguracion extends JFrame {
     }
 
     private void initComponents() {
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
-        panel.setBackground(Color.WHITE);
+        JPanel panel = new JPanel(new BorderLayout(12, 12));
+        EstilosUI.estilizarVentana(panel);
+
+        JPanel panelEncabezado = EstilosUI.crearEncabezado(
+                "Configuración general del sistema",
+                describirOperador());
 
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(4, 4, 4, 4);
         gbc.anchor = GridBagConstraints.WEST;
 
         JPanel panelSup = new JPanel(new GridBagLayout());
-        panelSup.setBackground(Color.WHITE);
+        EstilosUI.estilizarTarjeta(panelSup);
 
-        JLabel titulo = new JLabel("Configuración general del sistema");
-        titulo.setFont(new Font("Segoe UI", Font.BOLD, 20));
-        titulo.setForeground(new Color(0x12, 0x38, 0x5C));
+        JLabel lblSeccion = new JLabel("Parámetros globales");
+        EstilosUI.estilizarTituloSeccion(lblSeccion);
         gbc.gridx = 0;
         gbc.gridy = 0;
         gbc.gridwidth = 3;
-        panelSup.add(titulo, gbc);
+        gbc.weightx = 1.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        panelSup.add(lblSeccion, gbc);
 
-        gbc.gridwidth = 1;
+        EstilosUI.estilizarTextoPrimario(lblSeleccion);
         gbc.gridy = 1;
-        JLabel lblOperador = new JLabel(describirOperador());
-        lblOperador.setForeground(new Color(0x3A, 0x55, 0x68));
-        panelSup.add(lblOperador, gbc);
-
-        gbc.gridx = 0;
-        gbc.gridy = 2;
-        gbc.gridwidth = 3;
-        lblSeleccion.setForeground(new Color(0x3A, 0x55, 0x68));
         panelSup.add(lblSeleccion, gbc);
 
-        gbc.gridx = 0;
-        gbc.gridy = 3;
-        gbc.gridwidth = 3;
-        lblInfo.setForeground(new Color(0x3A, 0x55, 0x68));
+        EstilosUI.estilizarEstadoInfo(lblInfo);
+        gbc.gridy = 2;
         panelSup.add(lblInfo, gbc);
 
-        tablaConfiguracion.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         tablaConfiguracion.setAutoCreateRowSorter(false);
         tablaConfiguracion.getSelectionModel().addListSelectionListener(e -> actualizarSeleccion());
 
         JScrollPane scroll = new JScrollPane(tablaConfiguracion);
-        scroll.setPreferredSize(new Dimension(900, 260));
+        scroll.setPreferredSize(new Dimension(900, 270));
+        EstilosUI.estilizarTabla(tablaConfiguracion, scroll);
+        TableColumnModel columnas = tablaConfiguracion.getColumnModel();
+        if (columnas.getColumnCount() >= 3) {
+            columnas.getColumn(0).setPreferredWidth(230);
+            columnas.getColumn(1).setPreferredWidth(100);
+            columnas.getColumn(1).setMaxWidth(130);
+            columnas.getColumn(1).setCellRenderer(EstilosUI.crearRendererCebra(SwingConstants.CENTER));
+            columnas.getColumn(2).setPreferredWidth(540);
+        }
 
-        JPanel panelAcciones = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 6));
-        JButton btnActualizar = new JButton("Actualizar listado");
+        EstilosUI.estilizarBotonNeutro(btnActualizar);
         btnActualizar.addActionListener(e -> cargarConfiguracion());
-        JButton btnEditar = new JButton("Editar valor (seleccionado)");
-        btnEditar.addActionListener(e -> editarValor());
-        JButton btnVolver = new JButton("Volver al menú");
-        btnVolver.addActionListener(e -> dispose());
-        panelAcciones.add(btnActualizar);
-        panelAcciones.add(btnEditar);
-        panelAcciones.add(btnVolver);
 
-        JPanel panelCentro = new JPanel(new BorderLayout(6, 6));
-        panelCentro.setBackground(Color.WHITE);
+        EstilosUI.estilizarBotonSecundario(btnEditar);
+        btnEditar.addActionListener(e -> editarValor());
+
+        JButton btnVolver = new JButton("Volver al menú");
+        EstilosUI.estilizarBotonNeutro(btnVolver);
+        btnVolver.addActionListener(e -> dispose());
+
+        JPanel panelAcciones = EstilosUI.crearBarraAcciones(
+                new JComponent[]{btnActualizar, btnEditar},
+                new JComponent[]{btnVolver});
+
+        JPanel panelCentro = new JPanel(new BorderLayout(12, 12));
+        panelCentro.setBackground(EstilosUI.BG_CANVAS);
         panelCentro.add(panelSup, BorderLayout.NORTH);
         panelCentro.add(scroll, BorderLayout.CENTER);
 
+        panel.add(panelEncabezado, BorderLayout.NORTH);
         panel.add(panelCentro, BorderLayout.CENTER);
         panel.add(panelAcciones, BorderLayout.SOUTH);
         setContentPane(panel);
         pack();
-        setMinimumSize(new Dimension(940, 520));
+        setMinimumSize(new Dimension(940, 540));
     }
 
     private String describirOperador() {
-        if (operador == null) {
-            return "Operador: no identificado. Solo se habilita la consulta; la modificación fue rechazada.";
+        if (!PoliticaPermisos.tienePermisoOperacion(operador, PoliticaPermisos.ModuloMenu.CONFIGURACION_GENERAL)) {
+            return "Operador: sin autorización de Administrador.";
         }
         return "Operador: " + operador.getNombreUsuario() + " (" + operador.getRol().name() + ")";
     }
 
     private void cargarConfiguracion() {
+        boolean autorizado = PoliticaPermisos.tienePermisoOperacion(
+                operador, PoliticaPermisos.ModuloMenu.CONFIGURACION_GENERAL);
+        btnActualizar.setEnabled(autorizado);
+        btnEditar.setEnabled(autorizado);
+        if (!autorizado) {
+            valores.clear();
+            descripciones.clear();
+            claves.clear();
+            modeloTabla.setRowCount(0);
+            lblInfo.setText("Acceso denegado: requiere sesión de Administrador autenticada.");
+            lblSeleccion.setText(" ");
+            return;
+        }
         try {
-            Map<String, Integer> mapaValores = configuracionDAO.obtenerMapa();
-            Map<String, String> mapaDescripciones = configuracionDAO.obtenerDescripciones();
+            Map<String, Integer> mapaValores = configuracionService.obtenerValores(operador);
+            Map<String, String> mapaDescripciones = configuracionService.obtenerDescripciones(operador);
 
             valores.clear();
             descripciones.clear();
@@ -176,7 +195,7 @@ public class FrmConfiguracion extends JFrame {
                 lblInfo.setText("Seleccione un parámetro de la tabla para modificar su valor.");
                 lblSeleccion.setText(" ");
             }
-        } catch (SQLException ex) {
+        } catch (TorneoExcepcion ex) {
             lblInfo.setText("No se pudo cargar la configuración general: " + ex.getMessage());
         }
     }
@@ -200,46 +219,56 @@ public class FrmConfiguracion extends JFrame {
     }
 
     private void editarValor() {
+        if (!PoliticaPermisos.tienePermisoOperacion(operador, PoliticaPermisos.ModuloMenu.CONFIGURACION_GENERAL)) {
+            JOptionPane.showMessageDialog(this,
+                    "ERROR DE SEGURIDAD: Solo un Administrador autenticado puede modificar la configuración general.",
+                    "Configuración general", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
         String clave = obtenerClaveSeleccionada();
         if (clave == null) {
             JOptionPane.showMessageDialog(this, "Seleccione un parámetro de la tabla.", "Configuración general",
                     JOptionPane.WARNING_MESSAGE);
             return;
         }
-        if (operador == null || operador.getRol() != TiposDatos.Rol.ADMINISTRADOR) {
-            JOptionPane.showMessageDialog(this,
-                    "ERROR DE SEGURIDAD: Solo un Administrador autenticado puede modificar la configuración general.",
-                    "Configuración general", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
 
         Integer valorActual = valores.get(clave);
         JTextField txtValor = new JTextField(valorActual != null ? String.valueOf(valorActual) : "0", 8);
+        EstilosUI.estilizarCampoTexto(txtValor, null);
 
         JPanel form = new JPanel(new GridBagLayout());
-        form.setBackground(Color.WHITE);
+        EstilosUI.estilizarPanelModal(form);
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(4, 4, 4, 4);
+        gbc.insets = new Insets(5, 6, 5, 6);
         gbc.anchor = GridBagConstraints.WEST;
 
+        JLabel lblParam = new JLabel("Parámetro:");
+        EstilosUI.estilizarEtiquetaCampo(lblParam);
         gbc.gridx = 0;
         gbc.gridy = 0;
-        form.add(new JLabel("Parámetro:"), gbc);
+        form.add(lblParam, gbc);
+
+        JLabel lblClave = new JLabel(clave);
+        EstilosUI.estilizarTextoPrimario(lblClave);
         gbc.gridx = 1;
         gbc.gridwidth = 2;
-        form.add(new JLabel(clave), gbc);
+        form.add(lblClave, gbc);
 
+        JLabel lblNuevo = new JLabel("Nuevo valor:");
+        EstilosUI.estilizarEtiquetaCampo(lblNuevo);
         gbc.gridx = 0;
         gbc.gridy = 1;
         gbc.gridwidth = 1;
-        form.add(new JLabel("Nuevo valor:"), gbc);
+        form.add(lblNuevo, gbc);
         gbc.gridx = 1;
         form.add(txtValor, gbc);
 
+        JLabel lblAyuda = new JLabel("El valor debe ser un número entero mayor o igual a 0.");
+        EstilosUI.estilizarEstadoInfo(lblAyuda);
         gbc.gridx = 0;
         gbc.gridy = 2;
         gbc.gridwidth = 3;
-        form.add(new JLabel("El valor debe ser un número entero mayor o igual a 0."), gbc);
+        form.add(lblAyuda, gbc);
 
         int opcion = JOptionPane.showConfirmDialog(this, form, "Modificar parámetro \"" + clave + "\"",
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
@@ -278,14 +307,14 @@ public class FrmConfiguracion extends JFrame {
         }
 
         try {
-            configuracionDAO.actualizarValorInt(clave, nuevoValor);
+            configuracionService.actualizarParametro(clave, nuevoValor, operador);
             JOptionPane.showMessageDialog(this,
                     "ÉXITO: El parámetro \"" + clave + "\" quedó con valor " + nuevoValor + ".",
                     "Configuración general", JOptionPane.INFORMATION_MESSAGE);
             cargarConfiguracion();
-        } catch (SQLException ex) {
+        } catch (TorneoExcepcion ex) {
             JOptionPane.showMessageDialog(this,
-                    "ERROR DE CONEXIÓN: No se pudo persistir el cambio del parámetro \"" + clave + "\". "
+                    "No se pudo persistir el cambio del parámetro \"" + clave + "\". "
                             + ex.getMessage(),
                     "Configuración general", JOptionPane.ERROR_MESSAGE);
         }

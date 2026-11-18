@@ -37,6 +37,9 @@ public class CierrePartidoTransaccionalIT {
     @BeforeAll
     static void setUp() throws SQLException {
         assertTrue(ConexionBD.comprobarConexion(), "PostgreSQL debe estar activo en puerto 55432");
+        // DEF-004: fail-closed. La base efectiva de la suite debe ser la base de pruebas declarada.
+        // y nunca una base reservada (demostracion, inf06_test o temporal historica de auditoria).
+        ConexionBD.validarDestinoDePruebas();
 
         partidoService = new PartidoService();
         reclamoService = new ReclamoService();
@@ -129,13 +132,13 @@ public class CierrePartidoTransaccionalIT {
 
         // 5. Registrar incidencias antes del cierre:
         // Local marca 2 goles (minutos 15 y 40)
-        partidoService.registrarIncidencia(idPartido, idJLoc1, 15, TiposDatos.TipoAccion.GOL, null, "Gol de penal");
-        partidoService.registrarIncidencia(idPartido, idJLoc1, 40, TiposDatos.TipoAccion.GOL, null, "Gol de cabeza");
+        partidoService.registrarIncidencia(idPartido, idJLoc1, 15, TiposDatos.TipoAccion.GOL, null, "Gol de penal", admin);
+        partidoService.registrarIncidencia(idPartido, idJLoc1, 40, TiposDatos.TipoAccion.GOL, null, "Gol de cabeza", admin);
         // Visitante marca 1 gol (minuto 60)
-        partidoService.registrarIncidencia(idPartido, idJVis1, 60, TiposDatos.TipoAccion.GOL, null, "Gol de tiro libre");
+        partidoService.registrarIncidencia(idPartido, idJVis1, 60, TiposDatos.TipoAccion.GOL, null, "Gol de tiro libre", admin);
 
         // Expulsión por Roja Directa para jugador visitante (minuto 75)
-        partidoService.registrarIncidencia(idPartido, idJVisExp, 75, TiposDatos.TipoAccion.TARJETA_ROJA, "DIRECTA", "Falta violenta");
+        partidoService.registrarIncidencia(idPartido, idJVisExp, 75, TiposDatos.TipoAccion.TARJETA_ROJA, "DIRECTA", "Falta violenta", admin);
 
         // 6. Ejecutar PROTOCOLO ATÓMICO DE CIERRE DE ACTA
         Date finReal = new Date();
@@ -214,12 +217,12 @@ public class CierrePartidoTransaccionalIT {
         Long idP1 = p1.getIdPartido();
 
         // Registrar 2 amarillas y la consecuente roja por doble amarilla
-        partidoService.registrarIncidencia(idP1, idJDoble, 20, TiposDatos.TipoAccion.TARJETA_AMARILLA, null, "Primera amonestación");
-        partidoService.registrarIncidencia(idP1, idJDoble, 55, TiposDatos.TipoAccion.TARJETA_AMARILLA, null, "Segunda amonestación");
-        partidoService.registrarIncidencia(idP1, idJDoble, 55, TiposDatos.TipoAccion.TARJETA_ROJA, "DOBLE_AMARILLA", "Expulsión por 2 amarillas");
+        partidoService.registrarIncidencia(idP1, idJDoble, 20, TiposDatos.TipoAccion.TARJETA_AMARILLA, null, "Primera amonestación", admin);
+        partidoService.registrarIncidencia(idP1, idJDoble, 55, TiposDatos.TipoAccion.TARJETA_AMARILLA, null, "Segunda amonestación", admin);
+        partidoService.registrarIncidencia(idP1, idJDoble, 55, TiposDatos.TipoAccion.TARJETA_ROJA, "DOBLE_AMARILLA", "Expulsión por 2 amarillas", admin);
 
         // También registrar amarilla para el acumulador
-        partidoService.registrarIncidencia(idP1, idJAcum, 30, TiposDatos.TipoAccion.TARJETA_AMARILLA, null, "Amonestación");
+        partidoService.registrarIncidencia(idP1, idJAcum, 30, TiposDatos.TipoAccion.TARJETA_AMARILLA, null, "Amonestación", admin);
 
         partidoService.cerrarActaPartido(idP1, new Date(), null, admin);
 
@@ -244,7 +247,7 @@ public class CierrePartidoTransaccionalIT {
         // CASO 2: Jugador acumula 5 amarillas en 5 partidos distintos y recibe sanción automática
         for (int i = 2; i <= 5; i++) {
             Partido pSig = partidoService.programarPartido(idFase1, idEq1, idEq2, idCancha, null, new Date(), 90, admin);
-            partidoService.registrarIncidencia(pSig.getIdPartido(), idJAcum, 40, TiposDatos.TipoAccion.TARJETA_AMARILLA, null, "Amonestación fecha " + i);
+            partidoService.registrarIncidencia(pSig.getIdPartido(), idJAcum, 40, TiposDatos.TipoAccion.TARJETA_AMARILLA, null, "Amonestación fecha " + i, admin);
             partidoService.cerrarActaPartido(pSig.getIdPartido(), new Date(), null, admin);
         }
 
@@ -388,10 +391,22 @@ public class CierrePartidoTransaccionalIT {
         });
         assertTrue(exCapitan.getMessage().contains("no tiene permisos para cerrar actas"));
 
-        // 3. Operador ARBITRO u ORGANIZADOR puede cerrar el acta exitosamente
+        // 3. Control de titularidad arbitral (ADR-19 / DEF-013): el partido se programo SIN
+        // arbitro designado, por lo que ningun arbitro puede oficializar el acta. Solo un
+        // Administrador u Organizador puede cerrarlo.
         Arbitro arbitro = new Arbitro("arb_ob_" + s, "1234", "arb_ob_" + s + "@test.com", "Arbitro", "Oficial", "Nacional", "12345678");
         arbitroDAO.insertar(arbitro, AuthService.hashearSha256("1234"));
-        partidoService.cerrarActaPartido(idPartido, new Date(fechaInicio.getTime() + 5400000L), null, arbitro);
+        arbitro.setId(arbitroDAO.buscarTodos().stream()
+                .filter(a -> a.getUsuario().equals("arb_ob_" + s))
+                .findFirst().map(a -> a.getId()).orElse(null));
+        TorneoExcepcion exArbitroSinDesignacion = assertThrows(TorneoExcepcion.class, () -> {
+            partidoService.cerrarActaPartido(idPartido, new Date(fechaInicio.getTime() + 5400000L), null, arbitro);
+        });
+        assertTrue(exArbitroSinDesignacion.getMessage().contains("no tiene un"),
+                "Debe indicar que el partido no tiene arbitro designado: " + exArbitroSinDesignacion.getMessage());
+
+        // 4. Operador ADMINISTRADOR (o ORGANIZADOR) puede cerrar el acta exitosamente
+        partidoService.cerrarActaPartido(idPartido, new Date(fechaInicio.getTime() + 5400000L), null, admin);
 
         try (Connection conn = ConexionBD.obtenerConexionTest()) {
             Partido cerrado = partidoDAO.buscarPorId(conn, idPartido);
@@ -595,10 +610,10 @@ public class CierrePartidoTransaccionalIT {
         Long idPartido = p.getIdPartido();
 
         // Registrar incidencia de expulsión por roja directa sobre jugador lesionado
-        partidoService.registrarIncidencia(idPartido, idJLes, 30, TiposDatos.TipoAccion.TARJETA_ROJA, "DIRECTA", "Incidente en banco");
+        partidoService.registrarIncidencia(idPartido, idJLes, 30, TiposDatos.TipoAccion.TARJETA_ROJA, "DIRECTA", "Incidente en banco", admin);
 
         // Registrar incidencia de expulsión por doble amarilla sobre jugador inhabilitado
-        partidoService.registrarIncidencia(idPartido, idJInh, 45, TiposDatos.TipoAccion.TARJETA_ROJA, "DOBLE_AMARILLA", "Doble amonestación");
+        partidoService.registrarIncidencia(idPartido, idJInh, 45, TiposDatos.TipoAccion.TARJETA_ROJA, "DOBLE_AMARILLA", "Doble amonestación", admin);
 
         // Cerrar acta
         Date finReal = new Date(fechaInicio.getTime() + 5400000L);

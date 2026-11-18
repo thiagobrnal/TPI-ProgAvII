@@ -115,7 +115,7 @@ CREATE TABLE IF NOT EXISTS torneos (
     CONSTRAINT chk_torneo_formato_valido CHECK (formato IN ('LIGA', 'ELIMINATORIA', 'GRUPOS')),
     CONSTRAINT chk_torneo_cupo_minimo CHECK (cupo_equipos >= 2),
     CONSTRAINT chk_torneo_cupo_par CHECK (cupo_equipos % 2 = 0),
-    CONSTRAINT chk_torneo_estado_valido CHECK (estado IN ('CONFIGURACION', 'EN_CURSO', 'FINALIZADO'))
+    CONSTRAINT chk_torneo_estado_valido CHECK (estado IN ('CONFIGURACION', 'EN_CURSO', 'FINALIZADO', 'CANCELADO'))
 );
 
 -- ----------------------------------------------------------------------------
@@ -148,6 +148,7 @@ CREATE TABLE IF NOT EXISTS equipos (
     color_camiseta VARCHAR(50) NOT NULL,
     id_sede_habitual BIGINT REFERENCES canchas(id_cancha) ON DELETE SET NULL,
     id_capitan BIGINT NOT NULL REFERENCES usuarios(id_usuario) ON DELETE RESTRICT,
+    activo BOOLEAN NOT NULL DEFAULT TRUE,
     fecha_registro TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_equipo_nombre_no_vacio CHECK (length(trim(nombre)) > 0),
     CONSTRAINT chk_equipo_color_no_vacio CHECK (length(trim(color_camiseta)) > 0),
@@ -354,6 +355,7 @@ CREATE INDEX IF NOT EXISTS idx_usuarios_rol ON usuarios(id_rol);
 CREATE INDEX IF NOT EXISTS idx_equipos_categoria ON equipos(id_categoria);
 CREATE INDEX IF NOT EXISTS idx_equipos_sede_habitual ON equipos(id_sede_habitual);
 CREATE INDEX IF NOT EXISTS idx_equipos_capitan ON equipos(id_capitan);
+CREATE INDEX IF NOT EXISTS idx_equipos_activo ON equipos(activo);
 
 -- Jugadores
 CREATE INDEX IF NOT EXISTS idx_jugadores_equipo ON jugadores(id_equipo);

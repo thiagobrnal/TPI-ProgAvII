@@ -7,8 +7,14 @@
     <packaging>jar</packaging>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.source>17</maven.compiler.source>
-        <maven.compiler.target>17</maven.compiler.target>
+        <!--
+          COMPATIBILIDAD JAVA 17 (OBS-001).
+          Se usa 'release' en lugar de 'source'/'target' para que el compilador valide las
+          APIs disponibles en Java 17, incluso cuando la compilacion se ejecuta con un JDK
+          posterior (por ejemplo JDK 25). Asi el artefacto no puede enlazar contra APIs
+          que no existan en el runtime soportado.
+        -->
+        <maven.compiler.release>17</maven.compiler.release>
         <exec.mainClass>com.gestionamateur.tpi.progav.TPIProgAv</exec.mainClass>
     </properties>
 
@@ -43,6 +49,15 @@
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <!-- release=17 garantiza compatibilidad de bytecode y de APIs con Java 17 -->
+                    <release>17</release>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
                 <configuration>
@@ -51,9 +66,18 @@
                         <include>**/*IT.java</include>
                     </includes>
                     <systemPropertyVariables>
-                        <TPI_TEST_DB_URL>jdbc:postgresql://127.0.0.1:55432/tpi_pa2_inf06_test</TPI_TEST_DB_URL>
-                        <TPI_TEST_DB_USER>postgres</TPI_TEST_DB_USER>
-                        <TPI_TEST_DB_PASSWORD></TPI_TEST_DB_PASSWORD>
+                        <!--
+                          AISLAMIENTO FAIL-CLOSED (DEF-004).
+                          La URL de la base de pruebas NO se fija en el proyecto: debe proveerse
+                          de forma explicita por variable de entorno o propiedad del sistema.
+                          Si la variable no esta definida, Maven inyecta la referencia sin resolver
+                          y ConexionBD aborta la corrida con un mensaje accionable antes de abrir
+                          cualquier conexion. No existe ningun fallback hacia una base reservada.
+                          Uso:  $env:TPI_TEST_DB_URL = "jdbc:postgresql://127.0.0.1:55432/<base_de_pruebas>"
+                        -->
+                        <TPI_TEST_DB_URL>${env.TPI_TEST_DB_URL}</TPI_TEST_DB_URL>
+                        <TPI_TEST_DB_USER>${env.TPI_TEST_DB_USER}</TPI_TEST_DB_USER>
+                        <TPI_TEST_DB_PASSWORD>${env.TPI_TEST_DB_PASSWORD}</TPI_TEST_DB_PASSWORD>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>

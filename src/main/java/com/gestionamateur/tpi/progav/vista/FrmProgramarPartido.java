@@ -9,12 +9,26 @@ import com.gestionamateur.tpi.progav.modelo.Equipo;
 import com.gestionamateur.tpi.progav.modelo.TiposDatos;
 import com.gestionamateur.tpi.progav.modelo.TorneoExcepcion;
 import com.gestionamateur.tpi.progav.modelo.Usuario;
+import com.gestionamateur.tpi.progav.seguridad.PoliticaPermisos;
+import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
+import java.awt.Rectangle;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
+import javax.swing.BorderFactory;
+import javax.swing.JComponent;
 import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JViewport;
+import javax.swing.Scrollable;
 
 public class FrmProgramarPartido extends javax.swing.JFrame {
 
@@ -23,6 +37,8 @@ public class FrmProgramarPartido extends javax.swing.JFrame {
     private GestorEquipos gestorEquipos;
     private SimpleDateFormat formatoFechaHora;
     private Usuario operador;
+    private List<Equipo> equiposCargados = new ArrayList<>();
+    private List<Cancha> canchasCargadas = new ArrayList<>();
 
     public FrmProgramarPartido() {
         this(null);
@@ -57,11 +73,25 @@ public class FrmProgramarPartido extends javax.swing.JFrame {
         cmbEquipoLocal.removeAllItems();
         cmbEquipoVisitante.removeAllItems();
         cmbCancha.removeAllItems();
+        equiposCargados = new ArrayList<>();
+        canchasCargadas = new ArrayList<>();
 
-        // Solo se cargan equipos y sedes realmente registrados en la base de datos.
-        // No se crean datos ficticios desde la interfaz.
-        List<Equipo> equipos = GestorEquipos.getEquiposRegistrados();
-        for (Equipo e : equipos) {
+        boolean autorizado = PoliticaPermisos.tienePermisoOperacion(operador, PoliticaPermisos.ModuloMenu.PROGRAMAR_PARTIDOS);
+        if (!autorizado) {
+            btnProgramar.setEnabled(false);
+            cmbEquipoLocal.setEnabled(false);
+            cmbEquipoVisitante.setEnabled(false);
+            cmbCancha.setEnabled(false);
+            lblSubtitulo.setText("Acceso denegado: requiere sesión de Administrador u Organizador.");
+            return;
+        }
+        cmbEquipoLocal.setEnabled(true);
+        cmbEquipoVisitante.setEnabled(true);
+        cmbCancha.setEnabled(true);
+
+        // Solo se cargan equipos activos y canchas habilitadas desde BD.
+        equiposCargados.addAll(GestorEquipos.getEquiposRegistrados());
+        for (Equipo e : equiposCargados) {
             cmbEquipoLocal.addItem(e.getNombre());
             cmbEquipoVisitante.addItem(e.getNombre());
         }
@@ -69,17 +99,24 @@ public class FrmProgramarPartido extends javax.swing.JFrame {
             cmbEquipoVisitante.setSelectedIndex(1);
         }
 
-        for (Cancha c : GestorCanchas.getCanchasRegistradas()) {
+        canchasCargadas.addAll(GestorCanchas.getCanchasRegistradas());
+        for (Cancha c : canchasCargadas) {
             cmbCancha.addItem(c.getNombre());
         }
 
-        if (equipos.size() < 2 || cmbCancha.getItemCount() == 0) {
+        if (equiposCargados.size() < 2 || canchasCargadas.isEmpty()) {
             btnProgramar.setEnabled(false);
-            lblSubtitulo.setText("Para programar un partido se necesitan al menos 2 equipos y 1 sede registrados.");
+            lblSubtitulo.setText("Para programar un partido se necesitan al menos 2 equipos activos y 1 cancha habilitada.");
+        } else {
+            btnProgramar.setEnabled(true);
         }
     }
 
     private void actualizarVisorFixture() {
+        if (!PoliticaPermisos.tienePermisoOperacion(operador, PoliticaPermisos.ModuloMenu.PROGRAMAR_PARTIDOS)) {
+            txtAreaFixture.setText("Acceso denegado: requiere sesión autorizada de Organizador o Administrador.");
+            return;
+        }
         txtAreaFixture.setText(gestorPartidos.obtenerResumenFixture());
     }
 
@@ -103,16 +140,132 @@ public class FrmProgramarPartido extends javax.swing.JFrame {
         setDefaultCloseOperation(javax.swing.WindowConstants.DISPOSE_ON_CLOSE);
         setTitle("Programación de Partidos y Asignación Arbitral (CU-03)");
 
-        lblTitulo.setFont(new java.awt.Font("Segoe UI", 1, 18));
+        JPanel panel = new JPanel(new BorderLayout(12, 12));
+        EstilosUI.estilizarVentana(panel);
+
+        JPanel panelEncabezado = EstilosUI.crearEncabezado(
+                "Programación de partidos",
+                "Asignación de contendientes, sede deportiva, horario y árbitro disponible (CU-03)");
+
+        // --- Tarjeta de datos del encuentro ---
+        JPanel panelFormulario = new JPanel(new GridBagLayout());
+        EstilosUI.estilizarTarjeta(panelFormulario);
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5, 6, 5, 12);
+        gbc.anchor = GridBagConstraints.WEST;
+
         lblTitulo.setText("Programar Encuentro del Torneo");
+        EstilosUI.estilizarTituloSeccion(lblTitulo);
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.gridwidth = 2;
+        gbc.weightx = 1.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(2, 6, 8, 6);
+        panelFormulario.add(lblTitulo, gbc);
 
         lblLocal.setText("Equipo Local:");
-        lblVisitante.setText("Equipo Visitante:");
-        lblCancha.setText("Sede / Cancha:");
-        lblFechaHora.setText("Fecha y Hora (DD/MM/AAAA HH:MM):");
-        txtFechaHora.setText("25/10/2026 16:00");
+        lblLocal.setLabelFor(cmbEquipoLocal);
+        EstilosUI.estilizarEtiquetaCampo(lblLocal);
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        gbc.gridwidth = 1;
+        gbc.weightx = 0;
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.insets = new Insets(5, 6, 5, 12);
+        panelFormulario.add(lblLocal, gbc);
 
+        EstilosUI.estilizarCombo(cmbEquipoLocal);
+        cmbEquipoLocal.setMinimumSize(new Dimension(180, 30));
+        gbc.gridx = 1;
+        gbc.weightx = 1.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(5, 6, 5, 6);
+        panelFormulario.add(cmbEquipoLocal, gbc);
+
+        lblVisitante.setText("Equipo Visitante:");
+        lblVisitante.setLabelFor(cmbEquipoVisitante);
+        EstilosUI.estilizarEtiquetaCampo(lblVisitante);
+        gbc.gridx = 0;
+        gbc.gridy = 2;
+        gbc.weightx = 0;
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.insets = new Insets(5, 6, 5, 12);
+        panelFormulario.add(lblVisitante, gbc);
+
+        EstilosUI.estilizarCombo(cmbEquipoVisitante);
+        cmbEquipoVisitante.setMinimumSize(new Dimension(180, 30));
+        gbc.gridx = 1;
+        gbc.weightx = 1.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(5, 6, 5, 6);
+        panelFormulario.add(cmbEquipoVisitante, gbc);
+
+        lblCancha.setText("Sede / Cancha:");
+        lblCancha.setLabelFor(cmbCancha);
+        EstilosUI.estilizarEtiquetaCampo(lblCancha);
+        gbc.gridx = 0;
+        gbc.gridy = 3;
+        gbc.weightx = 0;
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.insets = new Insets(5, 6, 5, 12);
+        panelFormulario.add(lblCancha, gbc);
+
+        EstilosUI.estilizarCombo(cmbCancha);
+        cmbCancha.setMinimumSize(new Dimension(180, 30));
+        gbc.gridx = 1;
+        gbc.weightx = 1.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(5, 6, 5, 6);
+        panelFormulario.add(cmbCancha, gbc);
+
+        lblFechaHora.setText("Fecha y Hora (DD/MM/AAAA HH:MM):");
+        lblFechaHora.setLabelFor(txtFechaHora);
+        EstilosUI.estilizarEtiquetaCampo(lblFechaHora);
+        gbc.gridx = 0;
+        gbc.gridy = 4;
+        gbc.weightx = 0;
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.insets = new Insets(5, 6, 5, 12);
+        panelFormulario.add(lblFechaHora, gbc);
+
+        txtFechaHora.setText("25/10/2026 16:00");
+        EstilosUI.estilizarCampoTexto(txtFechaHora, "dd/MM/yyyy HH:mm");
+        txtFechaHora.setMinimumSize(new Dimension(180, txtFechaHora.getPreferredSize().height));
+        gbc.gridx = 1;
+        gbc.weightx = 1.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(5, 6, 5, 6);
+        panelFormulario.add(txtFechaHora, gbc);
+
+        // --- Tarjeta de resumen del fixture ---
+        JPanel panelFixture = new JPanel(new BorderLayout(0, 10));
+        EstilosUI.estilizarTarjeta(panelFixture);
+
+        lblSubtitulo.setText("Partidos Programados en el Fixture:");
+        EstilosUI.estilizarTituloSeccion(lblSubtitulo);
+        panelFixture.add(lblSubtitulo, BorderLayout.NORTH);
+
+        txtAreaFixture.setEditable(false);
+        txtAreaFixture.setColumns(20);
+        txtAreaFixture.setRows(6);
+        txtAreaFixture.setLineWrap(true);
+        txtAreaFixture.setWrapStyleWord(true);
+        EstilosUI.estilizarAreaTexto(txtAreaFixture);
+        txtAreaFixture.setBorder(BorderFactory.createEmptyBorder(6, 8, 6, 8));
+        jScrollPane1.setViewportView(txtAreaFixture);
+        jScrollPane1.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        jScrollPane1.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        jScrollPane1.setBorder(BorderFactory.createLineBorder(EstilosUI.BORDER_DEFAULT, 1));
+        jScrollPane1.getViewport().setBackground(EstilosUI.BG_CONTROL);
+        jScrollPane1.setPreferredSize(new Dimension(560, 150));
+        jScrollPane1.setMinimumSize(new Dimension(320, 110));
+        panelFixture.add(jScrollPane1, BorderLayout.CENTER);
+
+        // --- Barra inferior de acciones ---
         btnProgramar.setText("Programar y Asignar Árbitro");
+        EstilosUI.estilizarBotonPrimario(btnProgramar);
         btnProgramar.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 btnProgramarActionPerformed(evt);
@@ -120,82 +273,63 @@ public class FrmProgramarPartido extends javax.swing.JFrame {
         });
 
         btnCerrar.setText("Volver al Menú");
+        EstilosUI.estilizarBotonNeutro(btnCerrar);
         btnCerrar.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 btnCerrarActionPerformed(evt);
             }
         });
 
-        lblSubtitulo.setFont(new java.awt.Font("Segoe UI", 1, 13));
-        lblSubtitulo.setText("Partidos Programados en el Fixture:");
+        JPanel panelAcciones = EstilosUI.crearBarraAcciones(
+                new JComponent[]{btnProgramar},
+                new JComponent[]{btnCerrar});
 
-        txtAreaFixture.setEditable(false);
-        txtAreaFixture.setColumns(20);
-        txtAreaFixture.setRows(6);
-        jScrollPane1.setViewportView(txtAreaFixture);
+        // --- Contenedor central adaptable ---
+        JPanel panelCentro = new PanelCentroScrollable();
+        panelCentro.setBackground(EstilosUI.BG_CANVAS);
 
-        javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
-        getContentPane().setLayout(layout);
-        layout.setHorizontalGroup(
-            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(layout.createSequentialGroup()
-                .addGap(35, 35, 35)
-                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                    .addComponent(lblTitulo)
-                    .addComponent(lblSubtitulo)
-                    .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 520, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addGroup(layout.createSequentialGroup()
-                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(lblLocal)
-                            .addComponent(lblVisitante)
-                            .addComponent(lblCancha)
-                            .addComponent(lblFechaHora)
-                            .addComponent(btnCerrar))
-                        .addGap(25, 25, 25)
-                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(cmbEquipoLocal, 0, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                            .addComponent(cmbEquipoVisitante, 0, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                            .addComponent(cmbCancha, 0, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                            .addComponent(txtFechaHora)
-                            .addComponent(btnProgramar, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))))
-                .addContainerGap(35, Short.MAX_VALUE))
-        );
-        layout.setVerticalGroup(
-            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(layout.createSequentialGroup()
-                .addGap(20, 20, 20)
-                .addComponent(lblTitulo)
-                .addGap(25, 25, 25)
-                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(lblLocal)
-                    .addComponent(cmbEquipoLocal, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addGap(15, 15, 15)
-                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(lblVisitante)
-                    .addComponent(cmbEquipoVisitante, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addGap(15, 15, 15)
-                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(lblCancha)
-                    .addComponent(cmbCancha, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addGap(15, 15, 15)
-                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(lblFechaHora)
-                    .addComponent(txtFechaHora, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addGap(25, 25, 25)
-                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(btnProgramar, javax.swing.GroupLayout.PREFERRED_SIZE, 32, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addComponent(btnCerrar, javax.swing.GroupLayout.PREFERRED_SIZE, 32, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addGap(25, 25, 25)
-                .addComponent(lblSubtitulo)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 130, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(25, Short.MAX_VALUE))
-        );
+        GridBagConstraints gbcCentro = new GridBagConstraints();
+        gbcCentro.gridx = 0;
+        gbcCentro.gridy = 0;
+        gbcCentro.weightx = 1.0;
+        gbcCentro.weighty = 0.0;
+        gbcCentro.fill = GridBagConstraints.HORIZONTAL;
+        gbcCentro.insets = new Insets(0, 0, 12, 0);
+        panelCentro.add(panelFormulario, gbcCentro);
+
+        gbcCentro.gridy = 1;
+        gbcCentro.weighty = 1.0;
+        gbcCentro.fill = GridBagConstraints.BOTH;
+        gbcCentro.insets = new Insets(0, 0, 0, 0);
+        panelCentro.add(panelFixture, gbcCentro);
+
+        JScrollPane scrollCentro = new JScrollPane(
+                panelCentro,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollCentro.setBorder(BorderFactory.createEmptyBorder());
+        scrollCentro.setViewportBorder(null);
+        scrollCentro.setBackground(EstilosUI.BG_CANVAS);
+        scrollCentro.getViewport().setBackground(EstilosUI.BG_CANVAS);
+        scrollCentro.getVerticalScrollBar().setUnitIncrement(16);
+
+        panel.add(panelEncabezado, BorderLayout.NORTH);
+        panel.add(scrollCentro, BorderLayout.CENTER);
+        panel.add(panelAcciones, BorderLayout.SOUTH);
+        setContentPane(panel);
 
         pack();
+        setMinimumSize(new Dimension(660, 460));
+        setSize(new Dimension(Math.max(getWidth(), 900), Math.max(getHeight(), 650)));
     }
 
     private void btnProgramarActionPerformed(java.awt.event.ActionEvent evt) {
+        if (!PoliticaPermisos.tienePermisoOperacion(operador, PoliticaPermisos.ModuloMenu.PROGRAMAR_PARTIDOS)) {
+            JOptionPane.showMessageDialog(this,
+                    "Acceso denegado: requiere sesión de Organizador o Administrador.",
+                    "Acceso denegado", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
         String fechaTexto = txtFechaHora.getText().trim();
         if (fechaTexto.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Ingrese la fecha y hora del encuentro.", "Atención", JOptionPane.WARNING_MESSAGE);
@@ -209,8 +343,8 @@ public class FrmProgramarPartido extends javax.swing.JFrame {
             int idxVisitante = cmbEquipoVisitante.getSelectedIndex();
             int idxCancha = cmbCancha.getSelectedIndex();
 
-            List<Equipo> equipos = GestorEquipos.getEquiposRegistrados();
-            List<Cancha> canchas = GestorCanchas.getCanchasRegistradas();
+            List<Equipo> equipos = this.equiposCargados;
+            List<Cancha> canchas = this.canchasCargadas;
 
             if (idxLocal < 0 || idxVisitante < 0 || idxLocal >= equipos.size() || idxVisitante >= equipos.size()) {
                 JOptionPane.showMessageDialog(this, "Debe seleccionar ambos equipos contendientes.", "Datos incompletos", JOptionPane.WARNING_MESSAGE);
@@ -244,6 +378,37 @@ public class FrmProgramarPartido extends javax.swing.JFrame {
 
     private void btnCerrarActionPerformed(java.awt.event.ActionEvent evt) {
         this.dispose();
+    }
+
+    private static final class PanelCentroScrollable extends JPanel implements Scrollable {
+        PanelCentroScrollable() {
+            super(new GridBagLayout());
+        }
+
+        @Override
+        public Dimension getPreferredScrollableViewportSize() {
+            return getPreferredSize();
+        }
+
+        @Override
+        public int getScrollableUnitIncrement(Rectangle visibleRect, int orientation, int direction) {
+            return 16;
+        }
+
+        @Override
+        public int getScrollableBlockIncrement(Rectangle visibleRect, int orientation, int direction) {
+            return 48;
+        }
+
+        @Override
+        public boolean getScrollableTracksViewportWidth() {
+            return true;
+        }
+
+        @Override
+        public boolean getScrollableTracksViewportHeight() {
+            return getParent() instanceof JViewport vp && vp.getHeight() > getPreferredSize().height;
+        }
     }
 
     private javax.swing.JButton btnCerrar;

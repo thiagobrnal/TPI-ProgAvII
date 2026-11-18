@@ -1,6 +1,7 @@
 package com.gestionamateur.tpi.progav;
 
 import com.gestionamateur.tpi.progav.modelo.SistemaLogs;
+import com.gestionamateur.tpi.progav.vista.EstilosUI;
 import com.gestionamateur.tpi.progav.vista.FrmLogin;
 
 public class TPIProgAv {
@@ -8,8 +9,8 @@ public class TPIProgAv {
         // 1. Inicialización de la Bitácora de Eventos
         SistemaLogs.configurar();
 
-        // 2. Configuración del diseño visual moderno (FlatLaf Modo Oscuro)
-        com.formdev.flatlaf.FlatDarkLaf.setup();
+        // 2. Configuración del sistema visual Dark Stadium Slate (FlatLaf Modo Oscuro)
+        EstilosUI.inicializarTema();
 
         // 3. Invocación de la GUI
         java.awt.EventQueue.invokeLater(new Runnable() {

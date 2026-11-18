@@ -17,8 +17,12 @@ public class GestorReclamos {
     private final ReclamoService reclamoService = new ReclamoService();
 
     public List<Reclamo> listarPendientes() {
+        return new ArrayList<>();
+    }
+
+    public List<Reclamo> listarPendientes(Usuario operador) {
         try {
-            return reclamoService.listarReclamosPendientes();
+            return reclamoService.listarReclamosPendientes(operador);
         } catch (TorneoExcepcion e) {
             return new ArrayList<>();
         }

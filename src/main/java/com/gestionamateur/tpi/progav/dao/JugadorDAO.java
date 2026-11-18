@@ -113,6 +113,28 @@ public class JugadorDAO {
         return lista;
     }
 
+    public List<Jugador> buscarPorCapitan(Long idCapitan) throws SQLException {
+        try (Connection conn = ConexionBD.obtenerConexion()) {
+            return buscarPorCapitan(conn, idCapitan);
+        }
+    }
+
+    public List<Jugador> buscarPorCapitan(Connection conn, Long idCapitan) throws SQLException {
+        String sql = "SELECT j.id_jugador, j.id_equipo, j.nombre, j.dni, j.fecha_nacimiento, j.posicion, j.estado, j.historial_tarjetas "
+                   + "FROM jugadores j JOIN equipos e ON j.id_equipo = e.id_equipo "
+                   + "WHERE e.id_capitan = ? AND e.activo = TRUE ORDER BY j.nombre";
+        List<Jugador> lista = new ArrayList<>();
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, idCapitan);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    lista.add(mapearJugador(rs));
+                }
+            }
+        }
+        return lista;
+    }
+
     public List<Jugador> buscarTodos() throws SQLException {
         try (Connection conn = ConexionBD.obtenerConexion()) {
             return buscarTodos(conn);

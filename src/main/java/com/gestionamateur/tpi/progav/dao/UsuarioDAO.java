@@ -216,6 +216,44 @@ public class UsuarioDAO {
         }
     }
 
+    public boolean existeMailExcluyendoId(Connection conn, String mail, Long idUsuarioExcluido) throws SQLException {
+        String sql = "SELECT COUNT(*) FROM usuarios WHERE lower(mail) = lower(?)"
+                   + (idUsuarioExcluido != null ? " AND id_usuario <> ?" : "");
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, mail);
+            if (idUsuarioExcluido != null) {
+                ps.setLong(2, idUsuarioExcluido);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() && rs.getInt(1) > 0;
+            }
+        }
+    }
+
+    public void actualizarDatosBasicos(Connection conn, Long idUsuario, String mail, String nombre, String apellido, int idRol) throws SQLException {
+        String sql = "UPDATE usuarios SET mail = ?, nombre = ?, apellido = ?, id_rol = ? WHERE id_usuario = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, mail);
+            ps.setString(2, nombre);
+            ps.setString(3, apellido);
+            ps.setInt(4, idRol);
+            ps.setLong(5, idUsuario);
+            int filas = ps.executeUpdate();
+            if (filas != 1) {
+                throw new SQLException("No se encontró el usuario ID " + idUsuario + " para actualizar.");
+            }
+        }
+    }
+
+    public int contarAdministradoresActivos(Connection conn) throws SQLException {
+        String sql = "SELECT COUNT(*) FROM usuarios u JOIN roles r ON u.id_rol = r.id_rol "
+                   + "WHERE r.codigo = 'ADMINISTRADOR' AND u.activo = TRUE";
+        try (PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            return rs.next() ? rs.getInt(1) : 0;
+        }
+    }
+
     public int contarUsuarios(Connection conn) throws SQLException {
         String sql = "SELECT COUNT(*) FROM usuarios";
         try (Statement st = conn.createStatement();

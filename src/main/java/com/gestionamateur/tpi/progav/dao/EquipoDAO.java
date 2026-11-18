@@ -26,8 +26,8 @@ public class EquipoDAO {
     }
 
     public Long insertar(Connection conn, Equipo equipo, Long idCapitan) throws SQLException {
-        String sql = "INSERT INTO equipos (nombre, alias, id_categoria, color_camiseta, id_sede_habitual, id_capitan) "
-                   + "VALUES (?, ?, ?, ?, ?, ?) RETURNING id_equipo";
+        String sql = "INSERT INTO equipos (nombre, alias, id_categoria, color_camiseta, id_sede_habitual, id_capitan, activo) "
+                   + "VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id_equipo";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, equipo.getNombre());
             ps.setString(2, equipo.getAlias());
@@ -39,6 +39,7 @@ public class EquipoDAO {
                 ps.setNull(5, Types.BIGINT);
             }
             ps.setLong(6, idCapitan != null ? idCapitan : equipo.getCapitan().getId());
+            ps.setBoolean(7, equipo.isActivo());
 
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
@@ -95,7 +96,7 @@ public class EquipoDAO {
     }
 
     public Equipo buscarPorId(Connection conn, Long idEquipo) throws SQLException {
-        String sql = "SELECT id_equipo, nombre, alias, id_categoria, color_camiseta, id_sede_habitual, id_capitan "
+        String sql = "SELECT id_equipo, nombre, alias, id_categoria, color_camiseta, id_sede_habitual, id_capitan, activo "
                    + "FROM equipos WHERE id_equipo = ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, idEquipo);
@@ -115,8 +116,8 @@ public class EquipoDAO {
     }
 
     public Equipo buscarPorCapitan(Connection conn, Long idCapitan) throws SQLException {
-        String sql = "SELECT id_equipo, nombre, alias, id_categoria, color_camiseta, id_sede_habitual, id_capitan "
-                   + "FROM equipos WHERE id_capitan = ?";
+        String sql = "SELECT id_equipo, nombre, alias, id_categoria, color_camiseta, id_sede_habitual, id_capitan, activo "
+                   + "FROM equipos WHERE id_capitan = ? ORDER BY activo DESC, id_equipo ASC LIMIT 1";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, idCapitan);
             try (ResultSet rs = ps.executeQuery()) {
@@ -128,6 +129,29 @@ public class EquipoDAO {
         return null;
     }
 
+    public List<Equipo> buscarListaPorCapitan(Long idCapitan, boolean incluirInactivos) throws SQLException {
+        try (Connection conn = ConexionBD.obtenerConexion()) {
+            return buscarListaPorCapitan(conn, idCapitan, incluirInactivos);
+        }
+    }
+
+    public List<Equipo> buscarListaPorCapitan(Connection conn, Long idCapitan, boolean incluirInactivos) throws SQLException {
+        String sql = "SELECT id_equipo, nombre, alias, id_categoria, color_camiseta, id_sede_habitual, id_capitan, activo "
+                   + "FROM equipos WHERE id_capitan = ?"
+                   + (incluirInactivos ? "" : " AND activo = TRUE")
+                   + " ORDER BY activo DESC, nombre";
+        List<Equipo> lista = new ArrayList<>();
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, idCapitan);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    lista.add(mapearEquipo(conn, rs));
+                }
+            }
+        }
+        return lista;
+    }
+
     public List<Equipo> buscarTodos() throws SQLException {
         try (Connection conn = ConexionBD.obtenerConexion()) {
             return buscarTodos(conn);
@@ -135,8 +159,8 @@ public class EquipoDAO {
     }
 
     public List<Equipo> buscarTodos(Connection conn) throws SQLException {
-        String sql = "SELECT id_equipo, nombre, alias, id_categoria, color_camiseta, id_sede_habitual, id_capitan "
-                   + "FROM equipos ORDER BY nombre";
+        String sql = "SELECT id_equipo, nombre, alias, id_categoria, color_camiseta, id_sede_habitual, id_capitan, activo "
+                   + "FROM equipos WHERE activo = TRUE ORDER BY nombre";
         List<Equipo> lista = new ArrayList<>();
         try (PreparedStatement ps = conn.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
@@ -147,9 +171,52 @@ public class EquipoDAO {
         return lista;
     }
 
+    public List<Equipo> buscarTodosIncluyendoInactivos() throws SQLException {
+        try (Connection conn = ConexionBD.obtenerConexion()) {
+            return buscarTodosIncluyendoInactivos(conn);
+        }
+    }
+
+    public List<Equipo> buscarTodosIncluyendoInactivos(Connection conn) throws SQLException {
+        String sql = "SELECT id_equipo, nombre, alias, id_categoria, color_camiseta, id_sede_habitual, id_capitan, activo "
+                   + "FROM equipos ORDER BY activo DESC, nombre";
+        List<Equipo> lista = new ArrayList<>();
+        try (PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                lista.add(mapearEquipo(conn, rs));
+            }
+        }
+        return lista;
+    }
+
+    public void actualizarActivo(Connection conn, Long idEquipo, boolean activo) throws SQLException {
+        String sql = "UPDATE equipos SET activo = ? WHERE id_equipo = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setBoolean(1, activo);
+            ps.setLong(2, idEquipo);
+            int filas = ps.executeUpdate();
+            if (filas != 1) {
+                throw new SQLException("No se encontró el equipo ID " + idEquipo + " para cambiar su estado.");
+            }
+        }
+    }
+
+    public int contarPartidosEnCursoPorEquipo(Connection conn, Long idEquipo) throws SQLException {
+        String sql = "SELECT COUNT(*) FROM partidos p "
+                   + "JOIN partido_equipos pe ON pe.id_partido = p.id_partido "
+                   + "WHERE pe.id_equipo = ? AND p.estado IN ('PROGRAMADO', 'EN_CURSO')";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, idEquipo);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        }
+    }
+
     public List<Equipo> buscarPorCategoria(Connection conn, Long idCategoria) throws SQLException {
-        String sql = "SELECT id_equipo, nombre, alias, id_categoria, color_camiseta, id_sede_habitual, id_capitan "
-                   + "FROM equipos WHERE id_categoria = ? ORDER BY nombre";
+        String sql = "SELECT id_equipo, nombre, alias, id_categoria, color_camiseta, id_sede_habitual, id_capitan, activo "
+                   + "FROM equipos WHERE id_categoria = ? AND activo = TRUE ORDER BY nombre";
         List<Equipo> lista = new ArrayList<>();
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, idCategoria);
@@ -172,6 +239,12 @@ public class EquipoDAO {
             long idSedeVal = rs.getLong("id_sede_habitual");
             Long idSede = rs.wasNull() ? null : idSedeVal;
             Long idCap = rs.getLong("id_capitan");
+            boolean activo = true;
+            try {
+                activo = rs.getBoolean("activo");
+            } catch (SQLException ignore) {
+                activo = true;
+            }
 
             Categoria cat = categoriaDAO.buscarPorId(conn, idCat);
             Cancha sede = idSede != null ? canchaDAO.buscarPorId(conn, idSede) : null;
@@ -180,6 +253,7 @@ public class EquipoDAO {
             Equipo e = new Equipo(nombre, cat, color, sede, cap);
             e.setIdEquipo(id);
             e.setAlias(alias);
+            e.setActivo(activo);
             return e;
         } catch (TorneoExcepcion te) {
             throw new SQLException("Error al mapear equipo: " + te.getMessage(), te);

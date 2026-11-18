@@ -4,12 +4,10 @@ import com.gestionamateur.tpi.progav.controlador.GestorPartidos;
 import com.gestionamateur.tpi.progav.dao.PartidoDAO;
 import com.gestionamateur.tpi.progav.modelo.Partido;
 import com.gestionamateur.tpi.progav.modelo.Usuario;
+import com.gestionamateur.tpi.progav.seguridad.PoliticaPermisos;
 
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
@@ -21,12 +19,13 @@ import javax.swing.BorderFactory;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
+import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
-import javax.swing.JTextField;
 
 /**
  * CU-05: postergacion y suspension de partidos programados, con motivo obligatorio.
@@ -43,6 +42,8 @@ public class FrmSuspenderPartido extends JFrame {
     private final JComboBox<String> cmbPartido = new JComboBox<>();
     private final JTextArea txtMotivo = new JTextArea(5, 40);
     private final JLabel lblInfo = new JLabel(" ");
+    private final JButton btnPostergar = new JButton("Postergar partido");
+    private final JButton btnSuspender = new JButton("Suspender partido");
 
     public FrmSuspenderPartido(Usuario operador) {
         this.operador = operador;
@@ -54,65 +55,102 @@ public class FrmSuspenderPartido extends JFrame {
     }
 
     private void initComponents() {
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setBorder(BorderFactory.createEmptyBorder(14, 14, 14, 14));
-        panel.setBackground(Color.WHITE);
+        JPanel panel = new JPanel(new BorderLayout(12, 12));
+        EstilosUI.estilizarVentana(panel);
+
+        JPanel panelEncabezado = EstilosUI.crearEncabezado(
+                "Gestión de encuentros",
+                "Postergación o suspensión de partidos programados con motivo obligatorio (CU-05)");
 
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(5, 5, 5, 5);
+        gbc.insets = new Insets(6, 6, 6, 10);
         gbc.anchor = GridBagConstraints.WEST;
 
         JPanel panelSup = new JPanel(new GridBagLayout());
-        panelSup.setBackground(Color.WHITE);
-        JLabel titulo = new JLabel("Gestión de encontros");
-        titulo.setFont(new Font("Segoe UI", Font.BOLD, 20));
-        titulo.setForeground(new Color(0x12, 0x38, 0x5C));
+        EstilosUI.estilizarTarjeta(panelSup);
+
+        JLabel lblPartido = new JLabel("Partido programado:");
+        EstilosUI.estilizarEtiquetaCampo(lblPartido);
         gbc.gridx = 0;
         gbc.gridy = 0;
-        gbc.gridwidth = 2;
-        panelSup.add(titulo, gbc);
+        panelSup.add(lblPartido, gbc);
 
-        gbc.gridwidth = 1;
-        gbc.gridy = 1;
-        panelSup.add(new JLabel("Partido programado:"), gbc);
+        EstilosUI.estilizarCombo(cmbPartido);
+        cmbPartido.setPreferredSize(new Dimension(440, 30));
         gbc.gridx = 1;
-        cmbPartido.setPreferredSize(new Dimension(430, 26));
+        gbc.weightx = 1.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
         panelSup.add(cmbPartido, gbc);
 
+        JLabel lblMotivo = new JLabel("Motivo (obligatorio):");
+        EstilosUI.estilizarEtiquetaCampo(lblMotivo);
         gbc.gridx = 0;
-        gbc.gridy = 2;
-        panelSup.add(new JLabel("Motivo (obligatorio):"), gbc);
-        gbc.gridx = 1;
+        gbc.gridy = 1;
+        gbc.weightx = 0;
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.anchor = GridBagConstraints.NORTHWEST;
+        panelSup.add(lblMotivo, gbc);
+
         txtMotivo.setLineWrap(true);
         txtMotivo.setWrapStyleWord(true);
-        panelSup.add(txtMotivo, gbc);
+        EstilosUI.estilizarAreaTexto(txtMotivo);
+        txtMotivo.setBorder(BorderFactory.createEmptyBorder(6, 8, 6, 8));
+        JScrollPane scrollMotivo = new JScrollPane(
+                txtMotivo,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollMotivo.setBorder(BorderFactory.createLineBorder(EstilosUI.BORDER_DEFAULT, 1));
+        scrollMotivo.getViewport().setBackground(EstilosUI.BG_CONTROL);
+        scrollMotivo.setPreferredSize(new Dimension(440, 120));
+        gbc.gridx = 1;
+        gbc.weightx = 1.0;
+        gbc.weighty = 1.0;
+        gbc.fill = GridBagConstraints.BOTH;
+        panelSup.add(scrollMotivo, gbc);
 
+        EstilosUI.estilizarEstadoInfo(lblInfo);
         gbc.gridx = 0;
-        gbc.gridy = 3;
+        gbc.gridy = 2;
         gbc.gridwidth = 2;
-        lblInfo.setForeground(new Color(0x3A, 0x55, 0x68));
+        gbc.weighty = 0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.anchor = GridBagConstraints.WEST;
         panelSup.add(lblInfo, gbc);
 
-        JPanel panelAcciones = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 6));
-        JButton btnPostergar = new JButton("Postergar partido");
+        EstilosUI.estilizarBotonAdvertencia(btnPostergar);
         btnPostergar.addActionListener(e -> ejecutar("POSTERGAR"));
-        JButton btnSuspender = new JButton("Suspender partido");
-        btnSuspender.addActionListener(e -> ejecutar("SUSPENDER"));
-        JButton btnVolver = new JButton("Volver al menú");
-        btnVolver.addActionListener(e -> dispose());
-        panelAcciones.add(btnPostergar);
-        panelAcciones.add(btnSuspender);
-        panelAcciones.add(btnVolver);
 
+        EstilosUI.estilizarBotonPeligro(btnSuspender);
+        btnSuspender.addActionListener(e -> ejecutar("SUSPENDER"));
+
+        JButton btnVolver = new JButton("Volver al menú");
+        EstilosUI.estilizarBotonNeutro(btnVolver);
+        btnVolver.addActionListener(e -> dispose());
+
+        JPanel panelAcciones = EstilosUI.crearBarraAcciones(
+                new JComponent[]{btnPostergar, btnSuspender},
+                new JComponent[]{btnVolver});
+
+        panel.add(panelEncabezado, BorderLayout.NORTH);
         panel.add(panelSup, BorderLayout.CENTER);
         panel.add(panelAcciones, BorderLayout.SOUTH);
         setContentPane(panel);
         pack();
-        setMinimumSize(new Dimension(620, 420));
+        setMinimumSize(new Dimension(700, 460));
     }
 
     private void cargarPartidos() {
         partidos = new ArrayList<>();
+        boolean autorizado = PoliticaPermisos.tienePermisoOperacion(
+                operador, PoliticaPermisos.ModuloMenu.POSTERGAR_SUSPENDER_PARTIDOS);
+        btnPostergar.setEnabled(autorizado);
+        btnSuspender.setEnabled(autorizado);
+        cmbPartido.setEnabled(autorizado);
+        if (!autorizado) {
+            cmbPartido.setModel(new DefaultComboBoxModel<>());
+            lblInfo.setText("Acceso denegado: requiere sesión de Organizador o Administrador.");
+            return;
+        }
         try {
             for (Partido p : partidoDAO.buscarPendientesDeFinalizacion()) {
                 if (p.getEstadoPartido() == com.gestionamateur.tpi.progav.modelo.TiposDatos.EstadoPartido.PROGRAMADO) {

@@ -20,6 +20,7 @@ import com.gestionamateur.tpi.progav.modelo.SolicitudInscripcion;
 import com.gestionamateur.tpi.progav.modelo.TiposDatos;
 import com.gestionamateur.tpi.progav.modelo.TorneoExcepcion;
 import com.gestionamateur.tpi.progav.modelo.Usuario;
+import com.gestionamateur.tpi.progav.seguridad.PoliticaPermisos;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.List;
@@ -58,14 +59,14 @@ public class EquipoService {
 
     public Equipo registrarEquipo(String nombre, String alias, Long idCategoria, String colorCamiseta,
                                   Cancha sedeHabitual, Long idCapitan, Usuario operador) throws TorneoExcepcion {
-        if (operador == null) {
+        if (!PoliticaPermisos.esOperadorPersistidoValido(operador)) {
             throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para registrar equipos.");
         }
         TiposDatos.Rol rol = operador.getRol();
-        if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR && rol != TiposDatos.Rol.CAPITAN) {
+        if (!PoliticaPermisos.tienePermisoOperacion(operador, PoliticaPermisos.ModuloMenu.GESTIONAR_EQUIPOS)) {
             throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para registrar equipos.");
         }
-        if (rol == TiposDatos.Rol.CAPITAN && operador.getId() != null && !operador.getId().equals(idCapitan)) {
+        if (rol == TiposDatos.Rol.CAPITAN && !operador.getId().equals(idCapitan)) {
             throw new TorneoExcepcion("Acceso denegado: Un capitán sólo puede registrar un equipo designándose a sí mismo como capitán.");
         }
         try (Connection conn = ConexionBD.obtenerConexion()) {
@@ -86,8 +87,9 @@ public class EquipoService {
                 }
 
                 Equipo equipo = new Equipo(nombre, cat, colorCamiseta, cap);
-                equipo.setAlias(alias);
+                equipo.setAlias(alias != null && !alias.trim().isEmpty() ? alias.trim() : null);
                 equipo.setSedeHabitual(sedeHabitual);
+                equipo.setActivo(true);
 
                 Long idEquipo = equipoDAO.insertar(conn, equipo, idCapitan);
                 equipo.setIdEquipo(idEquipo);
@@ -109,11 +111,11 @@ public class EquipoService {
         }
     }
 
-    /** Torneo vigente (el mas reciente que no este FINALIZADO). */
+    /** Torneo vigente (el mas reciente que no este FINALIZADO ni CANCELADO). */
     private Long resolverTorneoVigente(Connection conn) throws SQLException {
         List<com.gestionamateur.tpi.progav.modelo.Torneo> torneos = new TorneoDAO().buscarTodos(conn);
         for (com.gestionamateur.tpi.progav.modelo.Torneo t : torneos) {
-            if (!"FINALIZADO".equalsIgnoreCase(t.getEstado())) {
+            if (!"FINALIZADO".equalsIgnoreCase(t.getEstado()) && !"CANCELADO".equalsIgnoreCase(t.getEstado())) {
                 return t.getIdTorneo();
             }
         }
@@ -125,14 +127,14 @@ public class EquipoService {
      */
     public Equipo actualizarEquipo(Long idEquipo, String nombre, String alias, Long idCategoria, String colorCamiseta,
                                    Long idCapitan, Cancha sedeHabitual, Usuario operador) throws TorneoExcepcion {
-        if (operador == null) {
+        if (!PoliticaPermisos.esOperadorPersistidoValido(operador)) {
             throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para editar equipos.");
         }
         TiposDatos.Rol rol = operador.getRol();
-        if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR && rol != TiposDatos.Rol.CAPITAN) {
+        if (!PoliticaPermisos.tienePermisoOperacion(operador, PoliticaPermisos.ModuloMenu.GESTIONAR_EQUIPOS)) {
             throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para editar equipos.");
         }
-        if (rol == TiposDatos.Rol.CAPITAN && operador.getId() != null && !operador.getId().equals(idCapitan)) {
+        if (rol == TiposDatos.Rol.CAPITAN && !operador.getId().equals(idCapitan)) {
             throw new TorneoExcepcion("Acceso denegado: Un capitán sólo puede editar el equipo que captainea.");
         }
         if (idEquipo == null) {
@@ -146,6 +148,17 @@ public class EquipoService {
                 if (existente == null) {
                     throw new TorneoExcepcion("El equipo indicado no existe.");
                 }
+                // DEF-001 (control de pertenencia de recursos, ADR-19):
+                // la pertenencia se valida contra la titularidad PERSISTIDA del equipo,
+                // nunca contra el captain que la interfaz propone asignar.
+                if (rol == TiposDatos.Rol.CAPITAN) {
+                    Usuario capitanActual = existente.getCapitan();
+                    if (capitanActual == null || capitanActual.getId() == null
+                            || !capitanActual.getId().equals(operador.getId())) {
+                        throw new TorneoExcepcion("Acceso denegado: Un capitán sólo puede editar el equipo que captainea. "
+                                + "El equipo indicado pertenece a otro capitán.");
+                    }
+                }
                 Categoria cat = categoriaDAO.buscarPorId(conn, idCategoria);
                 if (cat == null) {
                     throw new TorneoExcepcion("La categoría seleccionada no existe.");
@@ -158,10 +171,21 @@ public class EquipoService {
                     throw new TorneoExcepcion("El usuario capitán especificado no existe.");
                 }
 
+                // DEF-005: si el llamante pasa null, se preserva el alias persistido;
+                // si pasa un texto explícito, se actualiza o limpia si está vacío.
+                String aliasEfectivo;
+                if (alias == null) {
+                    aliasEfectivo = existente.getAlias();
+                } else {
+                    String limpio = alias.trim();
+                    aliasEfectivo = limpio.isEmpty() ? null : limpio;
+                }
+
                 Equipo equipo = new Equipo(nombre.trim(), cat, colorCamiseta, cap);
                 equipo.setIdEquipo(idEquipo);
-                equipo.setAlias(alias);
+                equipo.setAlias(aliasEfectivo);
                 equipo.setSedeHabitual(sedeHabitual);
+                equipo.setActivo(existente.isActivo());
                 equipoDAO.actualizar(conn, equipo, idCapitan);
 
                 conn.commit();
@@ -177,16 +201,77 @@ public class EquipoService {
         }
     }
 
+    /** CU-01: baja lógica o reactivación de un equipo preservando historial deportivo. */
+    public Equipo cambiarEstadoEquipo(Long idEquipo, boolean activo, Usuario operador) throws TorneoExcepcion {
+        if (!PoliticaPermisos.esOperadorPersistidoValido(operador)) {
+            throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para cambiar el estado de un equipo.");
+        }
+        TiposDatos.Rol rol = operador.getRol();
+        if (!PoliticaPermisos.tienePermisoOperacion(operador, PoliticaPermisos.ModuloMenu.GESTIONAR_EQUIPOS)) {
+            throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para modificar equipos.");
+        }
+        if (idEquipo == null || idEquipo <= 0) {
+            throw new TorneoExcepcion("Debe indicar el equipo a modificar.");
+        }
+        try (Connection conn = ConexionBD.obtenerConexion()) {
+            conn.setAutoCommit(false);
+            try {
+                Equipo existente = equipoDAO.buscarPorId(conn, idEquipo);
+                if (existente == null) {
+                    throw new TorneoExcepcion("El equipo indicado no existe.");
+                }
+                if (rol == TiposDatos.Rol.CAPITAN) {
+                    Usuario capitanActual = existente.getCapitan();
+                    if (capitanActual == null || capitanActual.getId() == null
+                            || !capitanActual.getId().equals(operador.getId())) {
+                        throw new TorneoExcepcion("Acceso denegado: Un capitán sólo puede dar de baja o reactivar su propio equipo.");
+                    }
+                }
+                if (!activo && equipoDAO.contarPartidosEnCursoPorEquipo(conn, idEquipo) > 0) {
+                    throw new TorneoExcepcion("No se puede dar de baja el equipo porque posee partidos PROGRAMADO o EN_CURSO pendientes.");
+                }
+                equipoDAO.actualizarActivo(conn, idEquipo, activo);
+                existente.setActivo(activo);
+                conn.commit();
+                SistemaLogs.info(EquipoService.class, "Estado de equipo ID " + idEquipo + " -> activo=" + activo + " por " + operador.getNombreUsuario());
+                return existente;
+            } catch (Exception e) {
+                conn.rollback();
+                if (e instanceof TorneoExcepcion) {
+                    throw (TorneoExcepcion) e;
+                }
+                throw new TorneoExcepcion("No se pudo cambiar el estado del equipo: " + e.getMessage(), e);
+            }
+        } catch (SQLException e) {
+            throw new TorneoExcepcion("Error de conexión al modificar estado del equipo.", e);
+        }
+    }
+
+    /** Consulta autorizada de equipos según alcance del rol (incluye inactivos para gestión). */
+    public List<Equipo> listarEquiposParaGestion(Usuario operador) throws TorneoExcepcion {
+        if (!PoliticaPermisos.tienePermisoOperacion(operador, PoliticaPermisos.ModuloMenu.GESTIONAR_EQUIPOS)) {
+            throw new TorneoExcepcion("Acceso denegado: se requiere sesión autorizada para gestionar equipos.");
+        }
+        try {
+            if (operador.getRol() == TiposDatos.Rol.CAPITAN) {
+                return equipoDAO.buscarListaPorCapitan(operador.getId(), true);
+            }
+            return equipoDAO.buscarTodosIncluyendoInactivos();
+        } catch (SQLException e) {
+            throw new TorneoExcepcion("Error al consultar los equipos registrados.", e);
+        }
+    }
+
     public void agregarJugadorAPlantel(Long idEquipo, Long idJugador) throws TorneoExcepcion {
         agregarJugadorAPlantel(idEquipo, idJugador, null);
     }
 
     public void agregarJugadorAPlantel(Long idEquipo, Long idJugador, Usuario operador) throws TorneoExcepcion {
-        if (operador == null) {
+        if (!PoliticaPermisos.esOperadorPersistidoValido(operador)) {
             throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para agregar jugadores a un plantel.");
         }
         TiposDatos.Rol rol = operador.getRol();
-        if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR && rol != TiposDatos.Rol.CAPITAN) {
+        if (!PoliticaPermisos.tienePermisoOperacion(operador, PoliticaPermisos.ModuloMenu.GESTIONAR_EQUIPOS)) {
             throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para agregar jugadores a un plantel.");
         }
         try (Connection conn = ConexionBD.obtenerConexion()) {
@@ -200,7 +285,10 @@ public class EquipoService {
             if (eq == null) {
                 throw new TorneoExcepcion("El equipo no existe.");
             }
-            if (operador != null && operador.getRol() == TiposDatos.Rol.CAPITAN) {
+            if (!eq.isActivo()) {
+                throw new TorneoExcepcion("El equipo '" + eq.getNombre() + "' está dado de baja y no admite altas de plantel.");
+            }
+            if (rol == TiposDatos.Rol.CAPITAN) {
                 if (eq.getCapitan() == null || eq.getCapitan().getId() == null || !operador.getId().equals(eq.getCapitan().getId())) {
                     throw new TorneoExcepcion("Acceso denegado: Un capitán sólo puede incorporar jugadores al plantel de su propio equipo.");
                 }
@@ -245,7 +333,7 @@ public class EquipoService {
     }
 
     public void resolverSolicitudInscripcion(Long idSolicitud, boolean aprobada, String motivo, Usuario operador) throws TorneoExcepcion {
-        if (operador == null) {
+        if (!PoliticaPermisos.esOperadorPersistidoValido(operador)) {
             throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para resolver solicitudes de inscripción.");
         }
         TiposDatos.Rol rol = operador.getRol();

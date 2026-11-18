@@ -12,8 +12,10 @@ import com.gestionamateur.tpi.progav.dao.PartidoDAO;
 import com.gestionamateur.tpi.progav.dao.PartidoEquipoDAO;
 import com.gestionamateur.tpi.progav.dao.SancionDAO;
 import com.gestionamateur.tpi.progav.dao.TorneoDAO;
+import com.gestionamateur.tpi.progav.modelo.Arbitro;
 import com.gestionamateur.tpi.progav.modelo.Cancha;
 import com.gestionamateur.tpi.progav.modelo.Cronologia;
+import com.gestionamateur.tpi.progav.modelo.Equipo;
 import com.gestionamateur.tpi.progav.modelo.Fase;
 import com.gestionamateur.tpi.progav.modelo.Jugador;
 import com.gestionamateur.tpi.progav.modelo.Motivo;
@@ -25,6 +27,7 @@ import com.gestionamateur.tpi.progav.modelo.TiposDatos;
 import com.gestionamateur.tpi.progav.modelo.Torneo;
 import com.gestionamateur.tpi.progav.modelo.TorneoExcepcion;
 import com.gestionamateur.tpi.progav.modelo.Usuario;
+import com.gestionamateur.tpi.progav.seguridad.PoliticaPermisos;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Date;
@@ -63,15 +66,21 @@ public class PartidoService {
         this.motivoDAO = new MotivoDAO();
     }
 
+    private void validarOperadorModulo(Usuario operador, PoliticaPermisos.ModuloMenu modulo, String accion) throws TorneoExcepcion {
+        if (!PoliticaPermisos.esSesionAutenticada(operador)) {
+            throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para " + accion + ".");
+        }
+        if (!PoliticaPermisos.tienePermiso(operador, modulo)) {
+            throw new TorneoExcepcion("Acceso denegado: El rol " + operador.getRol() + " no tiene permisos para " + accion + ".");
+        }
+        if (!PoliticaPermisos.esOperadorPersistidoValido(operador)) {
+            throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado con identificador válido para " + accion + ".");
+        }
+    }
+
     public Partido programarPartido(Long idFase, Long idLocal, Long idVisitante, Long idCancha,
                                      Long idArbitro, Date fechaHora, int duracionMinutos, Usuario operador) throws TorneoExcepcion {
-        if (operador == null) {
-            throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para programar encuentros.");
-        }
-        TiposDatos.Rol rol = operador.getRol();
-        if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR) {
-            throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para programar encuentros.");
-        }
+        validarOperadorModulo(operador, PoliticaPermisos.ModuloMenu.PROGRAMAR_PARTIDOS, "programar encuentros");
         return programarPartido(idFase, idLocal, idVisitante, idCancha, idArbitro, fechaHora, duracionMinutos);
     }
 
@@ -86,6 +95,21 @@ public class PartidoService {
                 Cancha cancha = canchaDAO.buscarPorId(conn, idCancha);
                 if (cancha == null) {
                     throw new TorneoExcepcion("La sede especificada no existe.");
+                }
+                // DEF-009: la habilitacion de la sede se valida en la capa de servicio, no
+                // solo en el combo de la interfaz, para que una cancha dada de baja entre la
+                // carga del formulario y la confirmacion tampoco pueda ser utilizada.
+                if (!cancha.isActiva()) {
+                    throw new TorneoExcepcion("La sede '" + cancha.getNombre()
+                            + "' no esta habilitada para la programacion de partidos.");
+                }
+                Equipo eqLocal = equipoDAO.buscarPorId(conn, idLocal);
+                if (eqLocal == null || !eqLocal.isActivo()) {
+                    throw new TorneoExcepcion("El equipo local indicado no existe o se encuentra dado de baja.");
+                }
+                Equipo eqVis = equipoDAO.buscarPorId(conn, idVisitante);
+                if (eqVis == null || !eqVis.isActivo()) {
+                    throw new TorneoExcepcion("El equipo visitante indicado no existe o se encuentra dado de baja.");
                 }
 
                 Partido p = new Partido(idFase, fechaHora, cancha, duracionMinutos > 0 ? duracionMinutos : 90);
@@ -108,15 +132,33 @@ public class PartidoService {
         }
     }
 
+    /** Sobrecarga sin operador: rechazada (fail-closed) para exigir identidad y permisos. */
     public void registrarIncidencia(Long idPartido, Long idJugador, int minuto, TiposDatos.TipoAccion accion,
                                    String tipoExpulsion, String observacion) throws TorneoExcepcion {
+        throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para registrar incidencias de partido.");
+    }
+
+    public void registrarIncidencia(Long idPartido, Long idJugador, int minuto, TiposDatos.TipoAccion accion,
+                                   String tipoExpulsion, String observacion, Usuario operador) throws TorneoExcepcion {
+        validarOperadorModulo(operador, PoliticaPermisos.ModuloMenu.CARGAR_ACTAS, "registrar incidencias de partido");
         try (Connection conn = ConexionBD.obtenerConexion()) {
             Partido p = partidoDAO.buscarPorId(conn, idPartido);
             if (p == null) {
                 throw new TorneoExcepcion("El partido no existe.");
             }
+            if (operador.getRol() == TiposDatos.Rol.ARBITRO) {
+                Arbitro arbitroDesignado = p.getArbitroDesignado();
+                if (arbitroDesignado == null || arbitroDesignado.getId() == null
+                        || !arbitroDesignado.getId().equals(operador.getId())) {
+                    throw new TorneoExcepcion("Acceso denegado: solo el árbitro oficial designado del encuentro puede registrar sus incidencias.");
+                }
+            }
             if (p.getEstadoPartido() == TiposDatos.EstadoPartido.FINALIZADO) {
                 throw new TorneoExcepcion("No se pueden agregar incidencias a un partido ya finalizado.");
+            }
+            if (p.getEstadoPartido() == TiposDatos.EstadoPartido.SUSPENDIDO
+                    || p.getEstadoPartido() == TiposDatos.EstadoPartido.POSTERGADO) {
+                throw new TorneoExcepcion("No se pueden registrar incidencias en un partido en estado " + p.getEstadoPartido() + ".");
             }
 
             Jugador j = jugadorDAO.buscarPorId(conn, idJugador);
@@ -126,7 +168,7 @@ public class PartidoService {
 
             Cronologia c = new Cronologia(minuto, accion, tipoExpulsion, j, p, observacion);
             cronologiaDAO.insertar(conn, c, idPartido, idJugador);
-            SistemaLogs.info(PartidoService.class, "Incidencia registrada: [" + accion + "] Jugador ID: " + idJugador + " en Partido ID: " + idPartido);
+            SistemaLogs.info(PartidoService.class, "Incidencia registrada: [" + accion + "] Jugador ID: " + idJugador + " en Partido ID: " + idPartido + " por " + operador.getNombreUsuario());
         } catch (SQLException e) {
             throw new TorneoExcepcion("Error al registrar incidencia: " + e.getMessage(), e);
         }
@@ -218,21 +260,21 @@ public class PartidoService {
     }
 
     private void validarOperadorAdministrativo(Usuario operador, String accion) throws TorneoExcepcion {
-        if (operador == null) {
+        if (!PoliticaPermisos.esOperadorPersistidoValido(operador)) {
             throw new TorneoExcepcion("Acceso denegado: Se requiere un operador autenticado para " + accion + " encuentros.");
         }
         TiposDatos.Rol rol = operador.getRol();
-        if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR) {
+        if (!PoliticaPermisos.tienePermisoOperacion(operador, PoliticaPermisos.ModuloMenu.POSTERGAR_SUSPENDER_PARTIDOS)) {
             throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para " + accion + " encuentros.");
         }
     }
 
     public void cerrarActaPartido(Long idPartido, Date fechaHoraFinReal, List<Cronologia> incidenciasFinales, Usuario operador) throws TorneoExcepcion {
-        if (operador == null) {
+        if (!PoliticaPermisos.esOperadorPersistidoValido(operador)) {
             throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para cerrar actas de partido.");
         }
         TiposDatos.Rol rol = operador.getRol();
-        if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR && rol != TiposDatos.Rol.ARBITRO) {
+        if (!PoliticaPermisos.tienePermisoOperacion(operador, PoliticaPermisos.ModuloMenu.CARGAR_ACTAS)) {
             throw new TorneoExcepcion("Acceso denegado: el rol " + rol + " no tiene permisos para cerrar actas de partido.");
         }
         cerrarActaPartidoInterno(idPartido, fechaHoraFinReal, incidenciasFinales, null, null, operador);
@@ -242,11 +284,11 @@ public class PartidoService {
         if (golesLocalDeclarados < 0 || golesVisitanteDeclarados < 0) {
             throw new TorneoExcepcion("La cantidad de goles no puede ser negativa.");
         }
-        if (operador == null) {
+        if (!PoliticaPermisos.esOperadorPersistidoValido(operador)) {
             throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para cerrar actas de partido.");
         }
         TiposDatos.Rol rol = operador.getRol();
-        if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR && rol != TiposDatos.Rol.ARBITRO) {
+        if (!PoliticaPermisos.tienePermisoOperacion(operador, PoliticaPermisos.ModuloMenu.CARGAR_ACTAS)) {
             throw new TorneoExcepcion("Acceso denegado: el rol " + rol + " no tiene permisos para cerrar actas de partido.");
         }
         cerrarActaPartidoInterno(idPartido, fechaHoraFinReal, null, golesLocalDeclarados, golesVisitanteDeclarados, operador);
@@ -274,12 +316,22 @@ public class PartidoService {
                 }
 
                 // Validación de titularidad arbitral si el operador posee rol ARBITRO
+                // DEF-013 (fail-closed, ADR-19): el cierre por un ARBITRO exige que el encuentro
+                // tenga un arbitro oficialmente designado y que sea ese mismo arbitro. Un partido
+                // sin arbitro designado no puede ser oficializado por un arbitro arbitrario: solo
+                // un ADMINISTRADOR u ORGANIZADOR puede cerrarlo.
                 if (operador != null && operador.getRol() == TiposDatos.Rol.ARBITRO) {
-                    if (partido.getArbitroDesignado() != null && partido.getArbitroDesignado().getId() != null) {
-                        if (operador.getId() == null || !partido.getArbitroDesignado().getId().equals(operador.getId())) {
-                            throw new TorneoExcepcion("Acceso denegado: El árbitro " + operador.getNombreUsuario()
-                                    + " no es el árbitro oficial designado para dirigir y cerrar el acta de este encuentro.");
-                        }
+                    Arbitro arbitroDesignado = partido.getArbitroDesignado();
+                    if (arbitroDesignado == null || arbitroDesignado.getId() == null) {
+                        throw new TorneoExcepcion("Acceso denegado: El partido " + idPartido + " no tiene un "
+                                + "árbitro oficial designado. El árbitro " + operador.getNombreUsuario() + " no es el "
+                                + "árbitro oficial designado para dirigir y cerrar el acta de este encuentro. "
+                                + "Sólo un Administrador u Organizador puede registrar el acta de un partido sin "
+                                + "árbitro designado.");
+                    }
+                    if (operador.getId() == null || !arbitroDesignado.getId().equals(operador.getId())) {
+                        throw new TorneoExcepcion("Acceso denegado: El árbitro " + operador.getNombreUsuario()
+                                + " no es el árbitro oficial designado para dirigir y cerrar el acta de este encuentro.");
                     }
                 }
 
@@ -432,7 +484,7 @@ public class PartidoService {
             if (recienSancionados.contains(j.getId())) {
                 continue; // No purga una sanción originada en este mismo partido
             }
-            List<Sancion> sancionesActivas = sancionDAO.buscarActivasPorJugador(conn, j.getId(), idTorneo);
+            List<Sancion> sancionesActivas = sancionDAO.buscarSancionesCumpliblesPorJugador(conn, j.getId(), idTorneo);
             for (Sancion s : sancionesActivas) {
                 sancionDAO.registrarFechaCumplida(conn, s.getId());
                 // Verificar si con esta fecha cumplida el jugador queda limpio

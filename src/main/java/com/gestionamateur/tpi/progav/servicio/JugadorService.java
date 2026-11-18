@@ -16,6 +16,7 @@ import com.gestionamateur.tpi.progav.modelo.SistemaLogs;
 import com.gestionamateur.tpi.progav.modelo.TiposDatos;
 import com.gestionamateur.tpi.progav.modelo.TorneoExcepcion;
 import com.gestionamateur.tpi.progav.modelo.Usuario;
+import com.gestionamateur.tpi.progav.seguridad.PoliticaPermisos;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.LocalDate;
@@ -61,22 +62,28 @@ public class JugadorService {
      */
     public Jugador registrarJugador(String nombre, int dni, Date fechaNacimiento, String posicion, Long idEquipo,
                                      TiposDatos.EstadoJugador estado, Usuario operador) throws TorneoExcepcion {
-        if (operador == null) {
+        if (!PoliticaPermisos.esOperadorPersistidoValido(operador)) {
             throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para registrar jugadores.");
         }
         TiposDatos.Rol rol = operador.getRol();
-        if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR && rol != TiposDatos.Rol.CAPITAN) {
+        if (!PoliticaPermisos.tienePermisoOperacion(operador, PoliticaPermisos.ModuloMenu.ALTA_JUGADORES)) {
             throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para registrar jugadores.");
         }
         try (Connection conn = ConexionBD.obtenerConexion()) {
-            if (operador != null && operador.getRol() == TiposDatos.Rol.CAPITAN) {
+            if (operador.getRol() == TiposDatos.Rol.CAPITAN) {
                 if (idEquipo == null) {
                     throw new TorneoExcepcion("Acceso denegado: Un capitán debe especificar su propio equipo para registrar jugadores.");
+                }
+                if (estado != null && estado != TiposDatos.EstadoJugador.ACTIVO) {
+                    throw new TorneoExcepcion("Acceso denegado: Un capitán sólo puede registrar jugadores en estado ACTIVO.");
                 }
                 try {
                     Equipo eq = equipoDAO.buscarPorId(conn, idEquipo);
                     if (eq == null || eq.getCapitan() == null || eq.getCapitan().getId() == null || !operador.getId().equals(eq.getCapitan().getId())) {
                         throw new TorneoExcepcion("Acceso denegado: Un capitán sólo puede registrar jugadores en el plantel de su propio equipo.");
+                    }
+                    if (!eq.isActivo()) {
+                        throw new TorneoExcepcion("No se pueden registrar jugadores en un equipo dado de baja.");
                     }
                 } catch (SQLException sqle) {
                     throw new TorneoExcepcion("Error al verificar pertenencia de equipo: " + sqle.getMessage(), sqle);
@@ -104,6 +111,9 @@ public class JugadorService {
                 if (equipo == null) {
                     throw new TorneoExcepcion("El equipo seleccionado no existe.");
                 }
+                if (!equipo.isActivo()) {
+                    throw new TorneoExcepcion("El equipo '" + equipo.getNombre() + "' se encuentra dado de baja y no admite altas de jugadores.");
+                }
                 if (equipo.getCategoria() != null) {
                     Date inicioTorneo = resolverFechaInicioTorneo(conn);
                     if (inicioTorneo != null
@@ -127,11 +137,45 @@ public class JugadorService {
     private Date resolverFechaInicioTorneo(Connection conn) throws SQLException {
         List<com.gestionamateur.tpi.progav.modelo.Torneo> torneos = new TorneoDAO().buscarTodos(conn);
         for (com.gestionamateur.tpi.progav.modelo.Torneo t : torneos) {
-            if (!"FINALIZADO".equalsIgnoreCase(t.getEstado())) {
+            if (!"FINALIZADO".equalsIgnoreCase(t.getEstado()) && !"CANCELADO".equalsIgnoreCase(t.getEstado())) {
                 return t.getFechaInicio();
             }
         }
         return torneos.isEmpty() ? null : torneos.get(0).getFechaInicio();
+    }
+
+    /** Lista los jugadores visibles para el rol autorizado sin exponer DNIs ajenos al capitán. */
+    public List<Jugador> listarJugadoresAutorizados(Usuario operador) throws TorneoExcepcion {
+        if (!PoliticaPermisos.tienePermisoOperacion(operador, PoliticaPermisos.ModuloMenu.ALTA_JUGADORES)) {
+            throw new TorneoExcepcion("Acceso denegado: se requiere una sesión autorizada para consultar jugadores.");
+        }
+        try {
+            if (operador.getRol() == TiposDatos.Rol.CAPITAN) {
+                return jugadorDAO.buscarPorCapitan(operador.getId());
+            }
+            return jugadorDAO.buscarTodos();
+        } catch (SQLException e) {
+            throw new TorneoExcepcion("Error al consultar los jugadores autorizados.", e);
+        }
+    }
+
+    /** Lista jugadores habilitados para emisión de credenciales (exclusivo ADMINISTRADOR / ORGANIZADOR). */
+    public List<Jugador> listarJugadoresParaCredencial(Usuario operador) throws TorneoExcepcion {
+        if (!PoliticaPermisos.tienePermisoOperacion(operador, PoliticaPermisos.ModuloMenu.IMPRIMIR_CREDENCIALES)) {
+            throw new TorneoExcepcion("Acceso denegado: solo ADMINISTRADOR u ORGANIZADOR pueden emitir credenciales.");
+        }
+        try {
+            List<Jugador> todos = jugadorDAO.buscarTodos();
+            List<Jugador> habilitados = new java.util.ArrayList<>();
+            for (Jugador j : todos) {
+                if (j != null && j.getEstado() == TiposDatos.EstadoJugador.ACTIVO) {
+                    habilitados.add(j);
+                }
+            }
+            return habilitados;
+        } catch (SQLException e) {
+            throw new TorneoExcepcion("Error al consultar jugadores habilitados para credencial.", e);
+        }
     }
 
     public boolean verificarElegibilidadCategoria(Jugador jugador, Categoria categoria, Date fechaInicioTorneo) throws TorneoExcepcion {
@@ -160,9 +204,29 @@ public class JugadorService {
         if (fechaNacimiento == null || fechaReferencia == null) {
             return 0;
         }
-        LocalDate nac = fechaNacimiento.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-        LocalDate ref = fechaReferencia.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+        LocalDate nac = aLocalDate(fechaNacimiento);
+        LocalDate ref = aLocalDate(fechaReferencia);
         return Period.between(nac, ref).getYears();
+    }
+
+    /**
+     * DEF-002: conversion segura de una fecha JDBC a {@link LocalDate}.
+     *
+     * <p>{@code java.sql.Date.toInstant()} lanza {@code UnsupportedOperationException} por
+     * contrato, porque una fecha SQL no tiene componente horario. Cuando la fecha proviene de
+     * {@code ResultSet.getDate(...)} su tipo efectivo es {@code java.sql.Date}, por lo que
+     * invocar {@code toInstant()} sobre ella abortaba el alta de jugadores con equipo
+     * (ver {@code UnsupportedOperationException} en {@code JugadorService.calcularEdad}).
+     *
+     * <p>La conversion se realiza en la frontera JDBC: para {@code java.sql.Date} se usan sus
+     * campos de calendario local (sin desplazamiento de zona horaria); para el resto de
+     * {@code java.util.Date} se convierte el instante a la zona horaria del sistema.
+     */
+    private static LocalDate aLocalDate(Date fecha) {
+        if (fecha instanceof java.sql.Date) {
+            return ((java.sql.Date) fecha).toLocalDate();
+        }
+        return fecha.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
     }
 
     public Jugador buscarPorId(Long idJugador) throws TorneoExcepcion {

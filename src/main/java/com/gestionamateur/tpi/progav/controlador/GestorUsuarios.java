@@ -7,7 +7,9 @@ import com.gestionamateur.tpi.progav.modelo.Arbitro;
 import com.gestionamateur.tpi.progav.modelo.TiposDatos;
 import com.gestionamateur.tpi.progav.modelo.TorneoExcepcion;
 import com.gestionamateur.tpi.progav.modelo.Usuario;
+import com.gestionamateur.tpi.progav.seguridad.PoliticaPermisos;
 import com.gestionamateur.tpi.progav.servicio.AuthService;
+import com.gestionamateur.tpi.progav.servicio.UsuarioService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
@@ -22,6 +24,7 @@ public class GestorUsuarios {
     private final ArbitroDAO arbitroDAO = new ArbitroDAO();
     private final RolDAO rolDAO = new RolDAO();
     private final AuthService authService = new AuthService(usuarioDAO, rolDAO);
+    private final UsuarioService usuarioService = new UsuarioService(usuarioDAO, arbitroDAO, rolDAO);
 
     public GestorUsuarios() {
     }
@@ -58,22 +61,91 @@ public class GestorUsuarios {
         return registrarUsuarioInterno(usuario, contraseña, mail, nombre, apellido, rol);
     }
 
-    // CU 17: Gestionar Usuarios con control de operador
+    // CU 17: Gestionar Usuarios con control estricto de operador ADMINISTRADOR para todos los roles
     public String registrarUsuario(String usuario, String contraseña, String mail, String nombre, String apellido, TiposDatos.Rol rol, Usuario operador) {
-        if (rol == TiposDatos.Rol.ADMINISTRADOR || rol == TiposDatos.Rol.ORGANIZADOR || rol == TiposDatos.Rol.ARBITRO) {
-            if (operador == null || operador.getRol() != TiposDatos.Rol.ADMINISTRADOR) {
-                return "ERROR DE SEGURIDAD: Acceso denegado. Solo un Administrador autenticado puede crear usuarios con roles privilegiados (" + rol + ").";
-            }
+        return registrarUsuario(usuario, contraseña, mail, nombre, apellido, rol, "Oficial", "S/D", operador);
+    }
+
+    public String registrarUsuario(String usuario, String contraseña, String mail, String nombre, String apellido,
+                                   TiposDatos.Rol rol, String categoriaArbitral, String telefono, Usuario operador) {
+        if (!PoliticaPermisos.tienePermisoOperacion(operador, PoliticaPermisos.ModuloMenu.GESTIONAR_USUARIOS)) {
+            return "ERROR DE SEGURIDAD: Acceso denegado. Solo un Administrador autenticado puede crear cuentas desde el gestor (" + rol + ").";
         }
         if (rol == TiposDatos.Rol.PUBLICO) {
             return "ERROR: El rol PÚBLICO es de consulta anónima y no admite cuentas de usuario.";
         }
-        return registrarUsuarioInterno(usuario, contraseña, mail, nombre, apellido, rol);
+        try {
+            Usuario creado = usuarioService.registrarUsuario(usuario, contraseña, mail, nombre, apellido, rol, categoriaArbitral, telefono, operador);
+            dbUsuarios.add(creado);
+            return "ÉXITO: La cuenta de " + nombre + " (" + rol.name() + ") ha sido creada en la base de datos.";
+        } catch (TorneoExcepcion te) {
+            if (te.getMessage() != null && te.getMessage().startsWith("Acceso denegado")) {
+                return "ERROR DE SEGURIDAD: " + te.getMessage();
+            }
+            return "ERROR DE VALIDACIÓN: " + te.getMessage();
+        } catch (Exception e) {
+            return "ERROR DE CONEXIÓN: " + e.getMessage();
+        }
     }
 
     // CU 17: Gestionar Usuarios
     public String registrarUsuario(String usuario, String contraseña, String mail, String nombre, String apellido, TiposDatos.Rol rol) {
         return registrarUsuario(usuario, contraseña, mail, nombre, apellido, rol, null);
+    }
+
+    public List<Usuario> listarUsuarios(Usuario operador) throws TorneoExcepcion {
+        return usuarioService.listarUsuarios(operador);
+    }
+
+    public Arbitro obtenerDetalleArbitro(Long idUsuario, Usuario operador) throws TorneoExcepcion {
+        return usuarioService.obtenerDetalleArbitro(idUsuario, operador);
+    }
+
+    public String actualizarUsuario(Long idUsuario, String mail, String nombre, String apellido,
+                                    TiposDatos.Rol nuevoRol, String categoriaArbitral, String telefono, Usuario operador) {
+        try {
+            usuarioService.actualizarUsuario(idUsuario, mail, nombre, apellido, nuevoRol, categoriaArbitral, telefono, operador);
+            return "ÉXITO: Los datos del usuario ID " + idUsuario + " fueron actualizados correctamente.";
+        } catch (TorneoExcepcion te) {
+            if (te.getMessage() != null && te.getMessage().startsWith("Acceso denegado")) {
+                return "ERROR DE SEGURIDAD: " + te.getMessage();
+            }
+            return "ERROR DE VALIDACIÓN: " + te.getMessage();
+        } catch (Exception e) {
+            return "ERROR DE CONEXIÓN: " + e.getMessage();
+        }
+    }
+
+    public String cambiarEstadoCuenta(Long idUsuario, boolean activo, Usuario operador) {
+        try {
+            usuarioService.cambiarEstadoCuenta(idUsuario, activo, operador);
+            return "ÉXITO: La cuenta ID " + idUsuario + " quedó " + (activo ? "ACTIVA." : "INACTIVA.");
+        } catch (TorneoExcepcion te) {
+            if (te.getMessage() != null && te.getMessage().startsWith("Acceso denegado")) {
+                return "ERROR DE SEGURIDAD: " + te.getMessage();
+            }
+            return "ERROR DE VALIDACIÓN: " + te.getMessage();
+        } catch (Exception e) {
+            return "ERROR DE CONEXIÓN: " + e.getMessage();
+        }
+    }
+
+    public String restablecerContrasena(Long idUsuario, String nuevaContrasena, Usuario operador) {
+        try {
+            usuarioService.restablecerContrasena(idUsuario, nuevaContrasena, operador);
+            return "ÉXITO: Contraseña restablecida de forma segura.";
+        } catch (TorneoExcepcion te) {
+            if (te.getMessage() != null && te.getMessage().startsWith("Acceso denegado")) {
+                return "ERROR DE SEGURIDAD: " + te.getMessage();
+            }
+            return "ERROR DE VALIDACIÓN: " + te.getMessage();
+        } catch (Exception e) {
+            return "ERROR DE CONEXIÓN: " + e.getMessage();
+        }
+    }
+
+    public void cerrarSesion(Usuario usuario) {
+        authService.cerrarSesion(usuario);
     }
 
     private String registrarUsuarioInterno(String usuario, String contraseña, String mail, String nombre, String apellido, TiposDatos.Rol rol) {

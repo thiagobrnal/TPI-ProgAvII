@@ -1,8 +1,8 @@
 package com.gestionamateur.tpi.progav.vista;
 
-import com.gestionamateur.tpi.progav.modelo.TiposDatos;
 import com.gestionamateur.tpi.progav.modelo.TorneoExcepcion;
 import com.gestionamateur.tpi.progav.modelo.Usuario;
+import com.gestionamateur.tpi.progav.seguridad.PoliticaPermisos;
 import com.gestionamateur.tpi.progav.servicio.ReporteService;
 
 import java.awt.BorderLayout;
@@ -38,6 +38,7 @@ import javax.swing.BorderFactory;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
+import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -63,8 +64,6 @@ public class FrmReportes extends JFrame {
 
     /** Nombre del servicio de impresion virtual de Windows usado para exportar. */
     private static final String SERVICIO_PDF_WINDOWS = "Microsoft Print to PDF";
-    private static final Color COLOR_TITULO = new Color(0x12, 0x38, 0x5C);
-    private static final Color COLOR_TEXTO_SECUNDARIO = new Color(0x3A, 0x55, 0x68);
 
     private final Usuario operador;
     private final ReporteService reporteService = new ReporteService();
@@ -84,13 +83,13 @@ public class FrmReportes extends JFrame {
                 "Tabla de posiciones",
                 "Puntos por partido sobre partidos finalizados (victoria 3, empate 1, derrota 0).",
                 new String[]{"Equipo", "PJ", "PG", "PE", "PP", "GF", "GC", "DG", "Puntos"},
-                reporteService::obtenerTablaPosiciones);
+                () -> reporteService.obtenerTablaPosiciones(operador));
 
         this.pestanaJugadores = new PestanaReporte(
                 "Reporte de jugadores",
                 "Goleadores, tarjetas amarillas, tarjetas rojas y sanciones vigentes por jugador.",
                 new String[]{"Jugador", "Equipo", "Goles", "Tarjetas amarillas", "Tarjetas rojas", "Sanciones vigentes"},
-                reporteService::obtenerReporteJugadores);
+                () -> reporteService.obtenerReporteJugadores(operador));
 
         this.pestanaHistorial = new PestanaReporte(
                 "Historial deportivo",
@@ -102,7 +101,7 @@ public class FrmReportes extends JFrame {
                 "Reporte de árbitros",
                 "Partidos dirigidos e incidencias registradas. Incluye a los árbitros sin partidos asignados.",
                 new String[]{"Árbitro", "Categoría arbitral", "Partidos dirigidos", "Incidencias registradas"},
-                reporteService::obtenerReporteArbitros);
+                () -> reporteService.obtenerReporteArbitros(operador));
 
         setTitle("Reportes del torneo (CU-19 a CU-22)");
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
@@ -117,11 +116,7 @@ public class FrmReportes extends JFrame {
      * apoya solo en el boton del panel: se verifica tambien aqui, en la ventana.
      */
     private boolean tienePermisoParaReportes() {
-        if (operador == null || operador.getRol() == null) {
-            return false;
-        }
-        return operador.getRol() == TiposDatos.Rol.ADMINISTRADOR
-                || operador.getRol() == TiposDatos.Rol.ORGANIZADOR;
+        return PoliticaPermisos.tienePermisoOperacion(operador, PoliticaPermisos.ModuloMenu.REPORTES);
     }
 
     // ------------------------------------------------------------------
@@ -129,29 +124,34 @@ public class FrmReportes extends JFrame {
     // ------------------------------------------------------------------
 
     private void initComponents() {
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
-        panel.setBackground(Color.WHITE);
+        JPanel panel = new JPanel(new BorderLayout(12, 12));
+        EstilosUI.estilizarVentana(panel);
 
-        JPanel panelSup = new JPanel(new BorderLayout());
-        panelSup.setBackground(Color.WHITE);
+        JPanel panelSup = new JPanel(new BorderLayout(0, 10));
+        panelSup.setBackground(EstilosUI.BG_CANVAS);
 
-        JLabel titulo = new JLabel("Reportes del torneo");
-        titulo.setFont(new Font("Segoe UI", Font.BOLD, 20));
-        titulo.setForeground(COLOR_TITULO);
-        panelSup.add(titulo, BorderLayout.NORTH);
+        JPanel panelEncabezado = EstilosUI.crearEncabezado(
+                "Reportes del torneo",
+                "Tablas oficiales, estadísticas, historiales y exportación a PDF / CSV (CU-19 a CU-22)");
+        panelSup.add(panelEncabezado, BorderLayout.NORTH);
 
-        JPanel panelSelector = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
-        panelSelector.setBackground(Color.WHITE);
-        panelSelector.add(new JLabel("Historial deportivo por:"));
+        JPanel panelSelector = new JPanel(new BorderLayout(12, 0));
+        EstilosUI.estilizarTarjeta(panelSelector);
+        JPanel panelCombo = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        panelCombo.setBackground(EstilosUI.BG_SURFACE);
+        JLabel lblHistorial = new JLabel("Historial deportivo por:");
+        EstilosUI.estilizarEtiquetaCampo(lblHistorial);
+        panelCombo.add(lblHistorial);
         cmbTipoHistorial.setModel(new DefaultComboBoxModel<>(new String[]{"Equipo", "Jugador"}));
-        cmbTipoHistorial.setPreferredSize(new Dimension(160, 24));
+        EstilosUI.estilizarCombo(cmbTipoHistorial);
         cmbTipoHistorial.addActionListener(e -> pestanaHistorial.actualizar());
-        panelSelector.add(cmbTipoHistorial);
-        lblInformacion.setForeground(COLOR_TEXTO_SECUNDARIO);
-        panelSelector.add(lblInformacion);
+        panelCombo.add(cmbTipoHistorial);
+        panelSelector.add(panelCombo, BorderLayout.WEST);
+        EstilosUI.estilizarEstadoInfo(lblInformacion);
+        panelSelector.add(lblInformacion, BorderLayout.CENTER);
         panelSup.add(panelSelector, BorderLayout.CENTER);
 
+        EstilosUI.estilizarPestanas(pestanas);
         pestanas.addTab("Tabla de posiciones", pestanaPosiciones);
         pestanas.addTab("Jugadores", pestanaJugadores);
         pestanas.addTab("Historial deportivo", pestanaHistorial);
@@ -162,7 +162,7 @@ public class FrmReportes extends JFrame {
 
         setContentPane(panel);
         pack();
-        setMinimumSize(new Dimension(980, 640));
+        setMinimumSize(new Dimension(980, 660));
     }
 
     private void cargarTodos() {
@@ -179,8 +179,8 @@ public class FrmReportes extends JFrame {
     private ReporteService.TablaReporte obtenerHistorialSeleccionado() throws TorneoExcepcion {
         boolean porJugador = "Jugador".equalsIgnoreCase((String) cmbTipoHistorial.getSelectedItem());
         return porJugador
-                ? reporteService.obtenerHistorialJugadores()
-                : reporteService.obtenerHistorialEquipos();
+                ? reporteService.obtenerHistorialJugadores(operador)
+                : reporteService.obtenerHistorialEquipos(operador);
     }
 
     // ------------------------------------------------------------------
@@ -215,7 +215,7 @@ public class FrmReportes extends JFrame {
             }
 
             String fecha = new SimpleDateFormat("dd/MM/yyyy HH:mm").format(new Date());
-            PageFormat formato = crearFormatoLandscapeA4();
+            PageFormat formato = crearFormatoPortraitA4();
             PrinterJob job = PrinterJob.getPrinterJob();
             job.setPrintService(servicio);
             job.setJobName(pestana.nombreArchivoSugerido());
@@ -223,7 +223,9 @@ public class FrmReportes extends JFrame {
                     pestana.ultimaCarga, fecha), formato);
 
             HashPrintRequestAttributeSet atributos = new HashPrintRequestAttributeSet();
-            atributos.add(OrientationRequested.LANDSCAPE);
+            // Release 1: los reportes se generan en A4 vertical.
+            atributos.add(OrientationRequested.PORTRAIT);
+            atributos.add(MediaSizeName.ISO_A4);
             atributos.add(new Copies(1));
             job.print(atributos);
 
@@ -287,26 +289,33 @@ public class FrmReportes extends JFrame {
     }
 
     /**
-     * Crea el formato de pagina A4 horizontal con margenes de 1 centímetro,
-     * para que la tabla del reporte ocupe el ancho completo de la hoja.
+     * Crea el formato de pagina A4 vertical (portrait) con margenes de 1 centimetro.
+     *
+     * <p>Requisito de Release 1: todos los reportes PDF (CU-19 a CU-22) se generan en A4
+     * vertical. El papel se declara con las medidas verticales del A4 (595 x 842 pt) porque
+     * es la unica medida que el controlador de Windows reconoce como A4; la orientacion
+     * PORTRAIT se fija explicitamente en el {@link PageFormat} y en los atributos de
+     * impresion, de modo que el area imprimible efectiva sea de 539 x 786 pt.
+     *
+     * <p>Nota tecnica: en el JDK, {@code PageFormat.setOrientation} no modifica el {@link Paper}
+     * sino una bandera; la conmutacion se aplica en los getters (por eso un papel vertical con
+     * orientacion LANDSCAPE entrega un area imprimible de 786 x 539 pt). Fijando PORTRAIT sobre
+     * el papel vertical A4 el area imprimible queda correctamente en 539 x 786 pt.
+     *
+     * @return formato de pagina A4 portrait
      */
-    private PageFormat crearFormatoLandscapeA4() {
+    static PageFormat crearFormatoPortraitA4() {
         PageFormat formato = new PageFormat();
         Paper papel = new Paper();
         MediaSize tamanoA4 = MediaSize.getMediaSizeForName(MediaSizeName.ISO_A4);
         float[] medidas = tamanoA4.getSize(Size2DSyntax.INCH);
-        // El papel se declara con las medidas verticales del A4 (595 x 842 pt): es la
-        // unica medida que el controlador de Windows reconoce como A4. Con la
-        // orientacion LANDSCAPE, AWT dibuja la tabla a lo largo del lado largo de
-        // la hoja; el controlador "Microsoft Print to PDF" la escribe girada 90
-        // grados sobre la hoja vertical (comportamiento estandar de Windows).
         double ancho = medidas[0] * 72.0;
         double alto = medidas[1] * 72.0;
         papel.setSize(ancho, alto);
         double margen = 28.0;
         papel.setImageableArea(margen, margen, ancho - (margen * 2), alto - (margen * 2));
         formato.setPaper(papel);
-        formato.setOrientation(PageFormat.LANDSCAPE);
+        formato.setOrientation(PageFormat.PORTRAIT);
         return formato;
     }
 
@@ -354,7 +363,7 @@ public class FrmReportes extends JFrame {
         private List<Object[]> ultimaCarga = new ArrayList<>();
 
         PestanaReporte(String tituloReporte, String descripcion, String[] columnas, ProveedorReporte proveedor) {
-            super(new BorderLayout(8, 8));
+            super(new BorderLayout(10, 10));
             this.tituloReporte = tituloReporte;
             this.descripcion = descripcion;
             this.columnas = columnas;
@@ -366,37 +375,44 @@ public class FrmReportes extends JFrame {
                 }
             };
             this.tabla = new JTable(modelo);
-            this.tabla.setRowHeight(22);
             this.tabla.setAutoCreateRowSorter(false);
-            this.tabla.setFillsViewportHeight(true);
 
-            setBackground(Color.WHITE);
-            setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+            setBackground(EstilosUI.BG_CANVAS);
+            setBorder(BorderFactory.createEmptyBorder(10, 6, 6, 6));
 
-            JPanel panelEncabezado = new JPanel(new BorderLayout());
-            panelEncabezado.setBackground(Color.WHITE);
+            JPanel panelEncabezado = new JPanel(new BorderLayout(0, 4));
+            EstilosUI.estilizarTarjeta(panelEncabezado);
             JLabel lblTitulo = new JLabel(tituloReporte);
-            lblTitulo.setFont(new Font("Segoe UI", Font.BOLD, 15));
-            lblTitulo.setForeground(COLOR_TITULO);
+            EstilosUI.estilizarTituloSeccion(lblTitulo);
             panelEncabezado.add(lblTitulo, BorderLayout.NORTH);
             JLabel lblDescripcion = new JLabel(descripcion);
-            lblDescripcion.setForeground(COLOR_TEXTO_SECUNDARIO);
+            EstilosUI.estilizarEstadoInfo(lblDescripcion);
             panelEncabezado.add(lblDescripcion, BorderLayout.CENTER);
 
             JScrollPane scroll = new JScrollPane(tabla);
             scroll.setPreferredSize(new Dimension(880, 340));
+            EstilosUI.estilizarTabla(tabla, scroll);
 
-            JPanel panelBotones = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
-            panelBotones.setBackground(Color.WHITE);
+            boolean autorizado = tienePermisoParaReportes();
+
             JButton btnActualizar = new JButton("Actualizar");
+            EstilosUI.estilizarBotonNeutro(btnActualizar);
+            btnActualizar.setEnabled(autorizado);
             btnActualizar.addActionListener(e -> actualizar());
+
             JButton btnExportar = new JButton("Exportar a PDF");
+            EstilosUI.estilizarBotonPrimario(btnExportar);
+            btnExportar.setEnabled(autorizado);
             btnExportar.addActionListener(e -> exportarReporteAPdf(this));
+
             JButton btnExportarCsv = new JButton("Exportar a CSV");
+            EstilosUI.estilizarBotonSecundario(btnExportarCsv);
+            btnExportarCsv.setEnabled(autorizado);
             btnExportarCsv.addActionListener(e -> exportarReporteACsv(this));
-            panelBotones.add(btnActualizar);
-            panelBotones.add(btnExportar);
-            panelBotones.add(btnExportarCsv);
+
+            JPanel panelBotones = EstilosUI.crearBarraAcciones(
+                    new JComponent[]{btnActualizar, btnExportar, btnExportarCsv},
+                    null);
 
             add(panelEncabezado, BorderLayout.NORTH);
             add(scroll, BorderLayout.CENTER);
@@ -483,13 +499,55 @@ public class FrmReportes extends JFrame {
      * encabezados de columna y filas de datos, paginando si no entra en una
      * sola hoja.
      */
+    /**
+     * Printable que dibuja el reporte completo: titulo, fecha de generacion,
+     * encabezados de columna y filas de datos, paginando si no entra en una
+     * sola hoja.
+     *
+     * <p><b>DEF-017 (perdia de filas en la paginacion).</b> La paginacion se resuelve con un
+     * <i>plan explicito</i>: se acumulan los altos reales de cada fila -que varian porque una
+     * celda puede ocupar varias lineas- y se obtiene el rango de filas de cada pagina. El rango
+     * ya no se calcula multiplicando el indice de pagina por un numero de filas por pagina
+     * (que diferia entre la primera pagina y las siguientes y dejaba filas sin imprimir), de
+     * modo que <b>todas las filas se imprimen exactamente una vez y en orden</b>.
+     *
+     * <p>El diseno se recalcula en cada invocacion a {@link #print}: es una funcion pura de
+     * (filas, columnas, {@link PageFormat} y metricas de fuente), por lo que el resultado no
+     * depende del orden en que el motor de impresion solicite las paginas.
+     *
+     * <p>En A4 vertical las celdas se reparten en varias lineas cuando el texto no cabe en la
+     * columna. Ningun dato se recorta: el texto se divide en lineas y, si una palabra suelta
+     * excede el ancho de la columna, se parte por caracteres.
+     */
     public static class ReportePrintable implements Printable {
 
+        /** Fuente del cuerpo del reporte. */
+        private static final Font FUENTE_DATOS = new Font("SansSerif", Font.PLAIN, 10);
+        /** Fuente de los encabezados de columna. */
+        private static final Font FUENTE_ENCABEZADO = new Font("SansSerif", Font.BOLD, 10);
+        /** Fuente del titulo del reporte. */
+        private static final Font FUENTE_TITULO = new Font("SansSerif", Font.BOLD, 15);
+        /** Fuente del pie de pagina. */
+        private static final Font FUENTE_PIE = new Font("SansSerif", Font.PLAIN, 9);
+
+        /** Alto de una linea de texto. */
+        private static final int ALTO_LINEA = 12;
+        /** Alto minimo de una fila de datos. */
         private static final int ALTO_FILA = 16;
-        private static final int ALTO_ENCABEZADO = 20;
+        /** Alto del bloque de titulo (solo en la primera pagina). */
         private static final int ALTO_TITULO = 26;
+        /** Alto del bloque de fecha de generacion (solo en la primera pagina). */
         private static final int ALTO_SUBTITULO = 16;
+        /** Alto reservado al pie de pagina. */
         private static final int MARGEN_INFERIOR = 8;
+        /** Relleno horizontal de cada celda. */
+        private static final int RELLENO_HORIZONTAL = 6;
+        /** Relleno vertical de cada fila y del encabezado. */
+        private static final int RELLENO_VERTICAL = 4;
+        /** Ancho maximo reservado a una columna. */
+        private static final int ANCHO_MAXIMO_COLUMNA = 220;
+        /** Alto del bloque de titulo mas la fecha de generacion. */
+        private static final int ALTO_BLOQUE_TITULO = ALTO_TITULO + ALTO_SUBTITULO + 6;
 
         private final String titulo;
         private final String[] columnas;
@@ -503,6 +561,44 @@ public class FrmReportes extends JFrame {
             this.fechaGeneracion = fechaGeneracion;
         }
 
+        /**
+         * Diseno maquetado de un reporte para un {@link PageFormat} concreto.
+         * Es inmutable y se recalcula en cada impresion (no hay estado compartido).
+         */
+        private static final class Diseno {
+
+            /** Ancho de cada columna, en puntos. */
+            final int[] anchos;
+            /** Lineas de cada encabezado de columna. */
+            final String[][] lineasEncabezado;
+            /** Alto del bloque de encabezado de la tabla. */
+            final int altoEncabezado;
+            /** Lineas de cada celda: [fila][columna][linea]. */
+            final String[][][] celdas;
+            /** Alto de cada fila de datos. */
+            final int[] altoFila;
+            /** Primera fila de cada pagina. */
+            final int[] inicioFila;
+            /** Ultima fila (exclusiva) de cada pagina. */
+            final int[] finFila;
+
+            Diseno(int[] anchos, String[][] lineasEncabezado, int altoEncabezado,
+                   String[][][] celdas, int[] altoFila, int[] inicioFila, int[] finFila) {
+                this.anchos = anchos;
+                this.lineasEncabezado = lineasEncabezado;
+                this.altoEncabezado = altoEncabezado;
+                this.celdas = celdas;
+                this.altoFila = altoFila;
+                this.inicioFila = inicioFila;
+                this.finFila = finFila;
+            }
+
+            /** Cantidad total de paginas del reporte. */
+            int totalPaginas() {
+                return inicioFila.length;
+            }
+        }
+
         @Override
         public int print(Graphics g, PageFormat pageFormat, int pageIndex) throws PrinterException {
             Graphics2D g2 = (Graphics2D) g.create();
@@ -510,76 +606,80 @@ public class FrmReportes extends JFrame {
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 
+                // El diseno se recalcula en cada pagina: es una funcion pura de los datos y
+                // del PageFormat, por lo que el resultado no depende del orden de llamada.
+                Diseno diseno = calcularDiseno(g2, pageFormat);
+                if (pageIndex < 0 || pageIndex >= diseno.totalPaginas()) {
+                    return NO_SUCH_PAGE;
+                }
+
                 double x = pageFormat.getImageableX();
                 double y = pageFormat.getImageableY();
                 double ancho = pageFormat.getImageableWidth();
                 double alto = pageFormat.getImageableHeight();
 
-                int[] anchos = calcularAnchosColumnas(g2, ancho);
-                int altoBloqueTitulo = (pageIndex == 0) ? ALTO_TITULO + ALTO_SUBTITULO + 6 : 0;
-                int altoDisponible = (int) (alto - altoBloqueTitulo - ALTO_ENCABEZADO - MARGEN_INFERIOR);
-                int filasPorPagina = Math.max(1, altoDisponible / ALTO_FILA);
+                int desde = diseno.inicioFila[pageIndex];
+                int hasta = diseno.finFila[pageIndex];
 
-                int desde = pageIndex * filasPorPagina;
-                int hasta = Math.min(filas.size(), desde + filasPorPagina);
-                if (desde >= filas.size() && !(filas.isEmpty() && pageIndex == 0)) {
-                    return NO_SUCH_PAGE;
-                }
-
-                double cursorY = y + altoBloqueTitulo;
+                double cursorY = y;
 
                 if (pageIndex == 0) {
-                    g2.setFont(new Font("SansSerif", Font.BOLD, 15));
+                    g2.setFont(FUENTE_TITULO);
                     g2.setColor(Color.BLACK);
-                    g2.drawString(titulo, (float) x, (float) (y + ALTO_TITULO - 8));
-                    g2.setFont(new Font("SansSerif", Font.PLAIN, 10));
+                    dibujarTexto(g2, titulo, (float) x, (float) (y + ALTO_TITULO - 8));
+                    g2.setFont(FUENTE_DATOS);
                     g2.setColor(Color.DARK_GRAY);
-                    g2.drawString("Generado el " + fechaGeneracion, (float) x, (float) (y + ALTO_TITULO + 6));
-                    cursorY = y + ALTO_TITULO + ALTO_SUBTITULO + 6;
+                    dibujarTexto(g2, "Generado el " + fechaGeneracion, (float) x, (float) (y + ALTO_TITULO + 6));
+                    cursorY = y + ALTO_BLOQUE_TITULO;
                 }
 
-                // Encabezado de la tabla
-                g2.setFont(new Font("SansSerif", Font.BOLD, 10));
-                FontMetrics metricsEncabezado = g2.getFontMetrics();
+                // Encabezado de la tabla: se repite en todas las paginas.
+                g2.setFont(FUENTE_ENCABEZADO);
                 g2.setColor(new Color(0xDC, 0xE4, 0xEC));
-                g2.fillRect((int) x, (int) cursorY, (int) ancho, ALTO_ENCABEZADO);
+                g2.fillRect((int) x, (int) cursorY, (int) ancho, diseno.altoEncabezado);
                 g2.setColor(Color.BLACK);
                 double cursorX = x;
                 for (int i = 0; i < columnas.length; i++) {
-                    g2.drawString(recortar(columnas[i], anchos[i], metricsEncabezado),
-                            (float) cursorX + 3, (float) cursorY + 14);
-                    cursorX += anchos[i];
+                    String[] lineas = diseno.lineasEncabezado[i];
+                    for (int l = 0; l < lineas.length; l++) {
+                        dibujarTexto(g2, lineas[l], (float) (cursorX + RELLENO_HORIZONTAL),
+                                (float) (cursorY + RELLENO_VERTICAL + (ALTO_LINEA * (l + 1)) - 3));
+                    }
+                    cursorX += diseno.anchos[i];
                 }
-                cursorY += ALTO_ENCABEZADO;
+                cursorY += diseno.altoEncabezado;
 
                 // Filas de datos
-                g2.setFont(new Font("SansSerif", Font.PLAIN, 10));
-                FontMetrics metricsFila = g2.getFontMetrics();
+                g2.setFont(FUENTE_DATOS);
                 for (int f = desde; f < hasta; f++) {
-                    Object[] fila = filas.get(f);
+                    double inicioFila = cursorY;
                     cursorX = x;
-                    for (int i = 0; i < columnas.length; i++) {
-                        Object valor = i < fila.length ? fila[i] : "";
-                        g2.setColor(Color.BLACK);
-                        g2.drawString(recortar(valor == null ? "" : String.valueOf(valor), anchos[i], metricsFila),
-                                (float) cursorX + 3, (float) cursorY + 12);
-                        cursorX += anchos[i];
+                    for (int c = 0; c < columnas.length; c++) {
+                        String[] lineas = diseno.celdas[f][c];
+                        for (int l = 0; l < lineas.length; l++) {
+                            g2.setColor(Color.BLACK);
+                            dibujarTexto(g2, lineas[l], (float) (cursorX + RELLENO_HORIZONTAL),
+                                    (float) (inicioFila + RELLENO_VERTICAL + (ALTO_LINEA * (l + 1)) - 3));
+                        }
+                        cursorX += diseno.anchos[c];
                     }
                     g2.setColor(new Color(0xE0, 0xE0, 0xE0));
-                    g2.drawLine((int) x, (int) cursorY + ALTO_FILA - 2, (int) (x + ancho), (int) cursorY + ALTO_FILA - 2);
-                    cursorY += ALTO_FILA;
+                    g2.drawLine((int) x, (int) (inicioFila + diseno.altoFila[f] - 2),
+                            (int) (x + ancho), (int) (inicioFila + diseno.altoFila[f] - 2));
+                    cursorY += diseno.altoFila[f];
                 }
 
                 if (filas.isEmpty()) {
-                    g2.setFont(new Font("SansSerif", Font.ITALIC, 10));
+                    g2.setFont(FUENTE_DATOS.deriveFont(Font.ITALIC));
                     g2.setColor(Color.GRAY);
-                    g2.drawString("No hay datos disponibles para este reporte.", (float) x, (float) cursorY + 14);
+                    dibujarTexto(g2, "No hay datos disponibles para este reporte.", (float) x, (float) (cursorY + 14));
                 }
 
                 // Pie de pagina
-                g2.setFont(new Font("SansSerif", Font.PLAIN, 9));
+                g2.setFont(FUENTE_PIE);
                 g2.setColor(Color.GRAY);
-                g2.drawString("Pagina " + (pageIndex + 1), (float) x, (float) (y + alto - 4));
+                dibujarTexto(g2, "Pagina " + (pageIndex + 1) + " de " + diseno.totalPaginas(),
+                        (float) x, (float) (y + alto - 4));
 
                 return PAGE_EXISTS;
             } finally {
@@ -588,50 +688,229 @@ public class FrmReportes extends JFrame {
         }
 
         /**
-         * Calcula el ancho de cada columna a partir del contenido y reparte el
-         * ancho disponible de la hoja de forma proporcional.
+         * Calcula el diseno completo del reporte: anchos de columna, celdas multilinea,
+         * altura de cada fila y <b>plan de paginacion explicito</b>.
+         *
+         * <p>El plan se obtiene acumulando los altos reales de las filas en cada pagina. Como
+         * la primera pagina reserva ademas el bloque de titulo, su capacidad es distinta de la
+         * de las paginas siguientes; al acumular los alturas reales, los rangos de filas de
+         * cada pagina quedan siempre contiguos y sin huecos, que es exactamente lo que fallaba
+         * antes (DEF-017).
          */
-        private int[] calcularAnchosColumnas(Graphics2D g2, double anchoDisponible) {
-            int[] anchos = new int[columnas.length];
-            g2.setFont(new Font("SansSerif", Font.PLAIN, 10));
-            int total = 0;
+        private Diseno calcularDiseno(Graphics2D g2, PageFormat pageFormat) {
+            double anchoDisponible = pageFormat.getImageableWidth();
+            g2.setFont(FUENTE_ENCABEZADO);
+            FontMetrics metricsEncabezado = g2.getFontMetrics();
+            g2.setFont(FUENTE_DATOS);
+            FontMetrics metricsFila = g2.getFontMetrics();
+            int[] anchos = calcularAnchosColumnas(metricsEncabezado, metricsFila, anchoDisponible);
+
+            String[][] lineasEncabezado = new String[columnas.length][];
+            int maxLineasEncabezado = 1;
             for (int i = 0; i < columnas.length; i++) {
-                int max = g2.getFontMetrics().stringWidth(columnas[i]) + 8;
-                for (Object[] fila : filas) {
-                    Object valor = i < fila.length ? fila[i] : "";
-                    int anchoTexto = g2.getFontMetrics().stringWidth(valor == null ? "" : String.valueOf(valor)) + 8;
-                    if (anchoTexto > max) {
-                        max = anchoTexto;
-                    }
-                }
-                anchos[i] = Math.min(max, 220);
-                total += anchos[i];
+                lineasEncabezado[i] = envolver(columnas[i], anchos[i] - (2 * RELLENO_HORIZONTAL), metricsEncabezado);
+                maxLineasEncabezado = Math.max(maxLineasEncabezado, lineasEncabezado[i].length);
             }
-            if (total <= 0) {
+            int altoEncabezado = (maxLineasEncabezado * ALTO_LINEA) + (2 * RELLENO_VERTICAL);
+
+            g2.setFont(FUENTE_DATOS);
+            String[][][] celdas = new String[filas.size()][][];
+            int[] altoFila = new int[filas.size()];
+            for (int f = 0; f < filas.size(); f++) {
+                Object[] fila = filas.get(f);
+                celdas[f] = new String[columnas.length][];
+                int maxLineas = 1;
+                for (int c = 0; c < columnas.length; c++) {
+                    Object valor = c < fila.length ? fila[c] : null;
+                    celdas[f][c] = envolver(valor == null ? "" : String.valueOf(valor),
+                            anchos[c] - (2 * RELLENO_HORIZONTAL), metricsFila);
+                    maxLineas = Math.max(maxLineas, celdas[f][c].length);
+                }
+                altoFila[f] = Math.max(ALTO_FILA, (maxLineas * ALTO_LINEA) + (2 * RELLENO_VERTICAL));
+            }
+
+            // Plan de paginacion explicito.
+            int altoPagina = (int) pageFormat.getImageableHeight();
+            List<int[]> rangos = new ArrayList<>();
+            int f = 0;
+            while (f < filas.size()) {
+                int bloqueTitulo = rangos.isEmpty() ? ALTO_BLOQUE_TITULO : 0;
+                int disponible = altoPagina - bloqueTitulo - altoEncabezado - MARGEN_INFERIOR;
+                int inicio = f;
+                int usado = 0;
+                while (f < filas.size() && (f == inicio || (usado + altoFila[f]) <= disponible)) {
+                    usado += altoFila[f];
+                    f++;
+                }
+                rangos.add(new int[]{inicio, f});
+            }
+            if (rangos.isEmpty()) {
+                rangos.add(new int[]{0, 0});
+            }
+
+            int[] inicioFila = new int[rangos.size()];
+            int[] finFila = new int[rangos.size()];
+            for (int p = 0; p < rangos.size(); p++) {
+                inicioFila[p] = rangos.get(p)[0];
+                finFila[p] = rangos.get(p)[1];
+            }
+            return new Diseno(anchos, lineasEncabezado, altoEncabezado, celdas, altoFila, inicioFila, finFila);
+        }
+
+        /**
+         * Punto de extension usado por las pruebas para capturar exactamente el texto que se
+         * dibuja en cada pagina. El comportamiento por defecto es la escritura directa.
+         *
+         * @param g2    contexto grafico
+         * @param texto texto a dibujar
+         * @param x     coordenada horizontal
+         * @param y     coordenada vertical
+         */
+        void dibujarTexto(Graphics2D g2, String texto, float x, float y) {
+            g2.drawString(texto, x, y);
+        }
+
+        /**
+         * Calcula el ancho de cada columna. Se parte del ancho natural (el del texto mas
+         * largo de la columna, con su relleno) y se reparte proporcionalmente el ancho
+         * disponible de la hoja, de modo que la tabla ocupe todo el ancho imprimible.
+         *
+         * <p>Cada columna respeta ademas un ancho minimo propio: el de su palabra mas larga
+         * (del encabezado y de los datos). Con ese minimo el texto nunca se parte a mitad de
+         * palabra, sino que se reparte en lineas por los espacios.
+         */
+        /**
+         * Calcula el ancho de cada columna.
+         *
+         * <p>Cada columna recibe como minimo el ancho de su <b>palabra mas larga</b> (del
+         * encabezado y de los datos), de modo que ninguna palabra se parte a mitad: el texto se
+         * reparte en lineas por los espacios. El excedente del ancho disponible se reparte
+         * proporcionalmente entre las columnas segun cuanto necesitan por encima de su minimo.
+         */
+        private int[] calcularAnchosColumnas(FontMetrics metricsEncabezado, FontMetrics metricsFila,
+                                             double anchoDisponible) {
+            int[] anchos = new int[columnas.length];
+            if (columnas.length == 0 || anchoDisponible <= 0) {
                 return anchos;
             }
-            if (total > anchoDisponible) {
-                double factor = anchoDisponible / total;
-                for (int i = 0; i < anchos.length; i++) {
-                    anchos[i] = Math.max(20, (int) (anchos[i] * factor));
+            int[] minimos = new int[columnas.length];
+            int[] naturales = new int[columnas.length];
+            int sumaMinimos = 0;
+            int sumaNaturales = 0;
+            for (int i = 0; i < columnas.length; i++) {
+                // Ancho natural: el del contenido mas largo de la columna (con relleno).
+                int maximo = metricsEncabezado.stringWidth(columnas[i]) + (2 * RELLENO_HORIZONTAL);
+                // Ancho minimo: el de la palabra mas larga, para no partir ninguna palabra.
+                int minimo = 0;
+                for (String palabra : columnas[i].split("\\s+")) {
+                    minimo = Math.max(minimo, metricsEncabezado.stringWidth(palabra) + (2 * RELLENO_HORIZONTAL));
                 }
+                for (Object[] fila : filas) {
+                    Object valor = i < fila.length ? fila[i] : null;
+                    String texto = valor == null ? "" : String.valueOf(valor);
+                    int anchoTexto = metricsFila.stringWidth(texto) + (2 * RELLENO_HORIZONTAL);
+                    if (anchoTexto > maximo) {
+                        maximo = anchoTexto;
+                    }
+                    for (String palabra : texto.split("\\s+")) {
+                        minimo = Math.max(minimo, metricsFila.stringWidth(palabra) + (2 * RELLENO_HORIZONTAL));
+                    }
+                }
+                naturales[i] = Math.min(maximo, ANCHO_MAXIMO_COLUMNA);
+                minimos[i] = Math.min(minimo + 2, ANCHO_MAXIMO_COLUMNA);
+                sumaMinimos += minimos[i];
+                sumaNaturales += naturales[i];
+            }
+            if (sumaMinimos >= anchoDisponible) {
+                // Los minimos no caben: se reparten de forma proporcional.
+                double factor = anchoDisponible / sumaMinimos;
+                for (int i = 0; i < anchos.length; i++) {
+                    anchos[i] = Math.max(1, (int) Math.round(minimos[i] * factor));
+                }
+                return anchos;
+            }
+            // Se reparten los minimos y el excedente se reparte segun la demanda de cada columna.
+            int excedente = (int) Math.round(anchoDisponible) - sumaMinimos;
+            int[] demanda = new int[columnas.length];
+            int sumaDemanda = 0;
+            for (int i = 0; i < columnas.length; i++) {
+                demanda[i] = Math.max(0, naturales[i] - minimos[i]);
+                sumaDemanda += demanda[i];
+            }
+            int asignado = 0;
+            for (int i = 0; i < anchos.length; i++) {
+                int extra = sumaDemanda > 0 ? (int) Math.round((excedente * demanda[i]) / (double) sumaDemanda) : 0;
+                anchos[i] = minimos[i] + extra;
+                asignado += anchos[i];
+            }
+            // El redondeo puede dejar algun punto sin asignar: se reparte entre las columnas.
+            int resto = (int) Math.round(anchoDisponible) - asignado;
+            for (int i = 0; i < anchos.length && resto > 0; i++) {
+                anchos[i]++;
+                resto--;
             }
             return anchos;
         }
 
-        /** Recorta el texto para que no desborde el ancho de la columna. */
-        private String recortar(String texto, int ancho, FontMetrics metrics) {
+        /**
+         * Divide un texto en las lineas que caben en el ancho indicado.
+         *
+         * <p>No se descarta ningun caracter: si una palabra suelta excede el ancho de la
+         * columna se parte por caracteres, de modo que ningun dato del reporte se pierde.
+         *
+         * @param texto            texto a dividir
+         * @param anchoDisponible  ancho util en puntos
+         * @param metrics          metricas de la fuente en uso
+         * @return lineas del texto
+         */
+        private static String[] envolver(String texto, int anchoDisponible, FontMetrics metrics) {
             if (texto == null) {
-                return "";
+                return new String[]{""};
             }
-            if (metrics.stringWidth(texto) <= ancho) {
-                return texto;
+            String contenido = texto.trim();
+            if (contenido.isEmpty()) {
+                return new String[]{""};
             }
-            String recortado = texto;
-            while (recortado.length() > 1 && metrics.stringWidth(recortado + "...") > ancho) {
-                recortado = recortado.substring(0, recortado.length() - 1);
+            if (anchoDisponible <= 0 || metrics.stringWidth(contenido) <= anchoDisponible) {
+                return new String[]{contenido};
             }
-            return recortado + "...";
+            List<String> lineas = new ArrayList<>();
+            StringBuilder actual = new StringBuilder();
+            for (String palabra : contenido.split("\\s+")) {
+                if (palabra.isEmpty()) {
+                    continue;
+                }
+                String candidato = actual.length() == 0 ? palabra : actual + " " + palabra;
+                if (metrics.stringWidth(candidato) <= anchoDisponible) {
+                    actual.setLength(0);
+                    actual.append(candidato);
+                    continue;
+                }
+                if (actual.length() > 0) {
+                    lineas.add(actual.toString());
+                    actual.setLength(0);
+                }
+                // Palabra mas larga que la columna: se parte por caracteres.
+                StringBuilder trozo = new StringBuilder();
+                for (char ch : palabra.toCharArray()) {
+                    String prueba = trozo.length() == 0 ? String.valueOf(ch) : trozo.toString() + ch;
+                    if (metrics.stringWidth(prueba) > anchoDisponible && trozo.length() > 0) {
+                        lineas.add(trozo.toString());
+                        trozo.setLength(0);
+                        trozo.append(ch);
+                    } else {
+                        trozo.append(ch);
+                    }
+                }
+                actual.append(trozo);
+            }
+            if (actual.length() > 0) {
+                lineas.add(actual.toString());
+            }
+            if (lineas.isEmpty()) {
+                lineas.add("");
+            }
+            return lineas.toArray(new String[0]);
         }
     }
 }

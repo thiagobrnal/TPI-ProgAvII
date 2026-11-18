@@ -17,8 +17,20 @@ public class GestorDisciplina {
     private final DisciplinaService disciplinaService = new DisciplinaService();
 
     public List<Sancion> listarPendientes() {
+        return new ArrayList<>();
+    }
+
+    public List<Sancion> listarPendientes(Usuario operador) {
         try {
-            return disciplinaService.listarSancionesPendientesTribunal();
+            return disciplinaService.listarSancionesPendientesTribunal(operador);
+        } catch (TorneoExcepcion e) {
+            return new ArrayList<>();
+        }
+    }
+
+    public List<com.gestionamateur.tpi.progav.modelo.Jugador> listarJugadores(Usuario operador) {
+        try {
+            return disciplinaService.listarJugadoresParaTribunal(operador);
         } catch (TorneoExcepcion e) {
             return new ArrayList<>();
         }

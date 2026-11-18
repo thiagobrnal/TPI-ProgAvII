@@ -38,6 +38,9 @@ public class AutorizacionServiciosIT {
     @BeforeAll
     static void setUp() throws SQLException {
         assertTrue(ConexionBD.comprobarConexion(), "PostgreSQL debe estar activo en puerto 55432");
+        // DEF-004: fail-closed. La base efectiva de la suite debe ser la base de pruebas declarada.
+        // y nunca una base reservada (demostracion, inf06_test o temporal historica de auditoria).
+        ConexionBD.validarDestinoDePruebas();
 
         partidoService = new PartidoService();
         torneoService = new TorneoService();

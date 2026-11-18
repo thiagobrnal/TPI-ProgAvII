@@ -66,6 +66,10 @@ public class GestorPartidos {
                 Long idArbitro = arbitroAsignado.getId();
                 Partido pBD = partidoService.programarPartido(idFase, local.getIdEquipo(), visitante.getIdEquipo(), sede.getIdCancha(), idArbitro, fechaHora, 90, operador);
                 dbPartidos.add(pBD);
+                // CU-03.2: notificacion por correo a los involucrados del partido.
+                // Se dispara DESPUES de persistir el partido: un fallo del correo no puede
+                // invalidar la operacion deportiva ya confirmada.
+                    notificarProgramacion(pBD.getIdPartido());
                 String msg = "ÉXITO: Partido #" + pBD.getIdPartido() + " registrado en la base de datos (" + local.getNombre() + " vs " + visitante.getNombre() + ").";
                 msg += "\nÁrbitro asignado: " + arbitroAsignado.getNombre() + " " + arbitroAsignado.getApellido();
                 return msg;
@@ -99,16 +103,10 @@ public class GestorPartidos {
                     new com.gestionamateur.tpi.progav.servicio.TorneoService();
             List<com.gestionamateur.tpi.progav.modelo.Torneo> torneos = torneoService.listarTodos();
             for (com.gestionamateur.tpi.progav.modelo.Torneo t : torneos) {
-                if ("FINALIZADO".equalsIgnoreCase(t.getEstado())) {
+                if ("FINALIZADO".equalsIgnoreCase(t.getEstado())
+                        || "CANCELADO".equalsIgnoreCase(t.getEstado())) {
                     continue;
                 }
-                List<com.gestionamateur.tpi.progav.modelo.Fase> fases =
-                        new com.gestionamateur.tpi.progav.dao.FaseDAO().buscarPorTorneo(t.getIdTorneo());
-                if (fases != null && !fases.isEmpty()) {
-                    return fases.get(0).getIdFase();
-                }
-            }
-            for (com.gestionamateur.tpi.progav.modelo.Torneo t : torneos) {
                 List<com.gestionamateur.tpi.progav.modelo.Fase> fases =
                         new com.gestionamateur.tpi.progav.dao.FaseDAO().buscarPorTorneo(t.getIdTorneo());
                 if (fases != null && !fases.isEmpty()) {
@@ -123,17 +121,23 @@ public class GestorPartidos {
 
     // CU 3.1: Busca un arbitro registrado que no tenga otro encuentro asignado
     // en una franja horaria incompatible. La comprobacion se hace contra PostgreSQL.
-    private Arbitro buscarArbitroDisponible(Date fechaHora) {
+    //
+    // DEF-003 (fail-closed): si NO se puede verificar la disponibilidad, no se puede
+    // afirmar que un arbitro este libre. Ante un fallo de la consulta se aborta la
+    // asignacion automatica en lugar de devolver el primer arbitro disponible.
+    private Arbitro buscarArbitroDisponible(Date fechaHora) throws SQLException {
         List<Arbitro> arbitros = GestorUsuarios.getArbitrosRegistrados();
         if (arbitros.isEmpty()) {
             return null;
         }
-        List<Partido> partidosPendientes = new ArrayList<>();
+        List<Partido> partidosPendientes;
         try {
             partidosPendientes = partidoDAO.buscarPendientesDeFinalizacion();
         } catch (SQLException e) {
-            LOGGER.warning("No se pudieron consultar los partidos pendientes para evaluar "
-                    + "la disponibilidad de arbitros: " + e.getMessage());
+            LOGGER.log(Level.SEVERE, "No se pudo verificar la disponibilidad de arbitros: " + e.getMessage(), e);
+            throw new SQLException("No se pudo verificar la disponibilidad de arbitros porque la base de datos no esta "
+                    + "disponible. Se aborta la asignacion automatica para no asignar un arbitro con posible "
+                    + "conflicto de horario. Detalle: " + e.getMessage(), e);
         }
         for (Arbitro arb : arbitros) {
             boolean ocupado = false;
@@ -289,6 +293,21 @@ public class GestorPartidos {
             LOGGER.warning("No se pudieron cargar partidos desde base de datos: " + e.getMessage());
         }
         return dbPartidos;
+    }
+
+    /**
+     * CU-03.2: dispara la notificacion por correo de la programacion.
+     *
+     * <p>Un fallo del servicio de correo no debe invalidar la programacion del partido: el
+     * error queda registrado en la bitacora interna (flujo alternativo A1 de la especificacion).
+     */
+    private void notificarProgramacion(Long idPartido) {
+        try {
+            new com.gestionamateur.tpi.progav.servicio.NotificacionCorreoService().notificarProgramacion(idPartido);
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "No se pudo ejecutar la notificacion de correo del partido " + idPartido
+                    + ": " + e.getMessage());
+        }
     }
 
     public String obtenerResumenFixture() {

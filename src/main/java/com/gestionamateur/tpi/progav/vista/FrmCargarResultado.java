@@ -11,12 +11,10 @@ import com.gestionamateur.tpi.progav.modelo.Partido;
 import com.gestionamateur.tpi.progav.modelo.PartidoEquipo;
 import com.gestionamateur.tpi.progav.modelo.TiposDatos;
 import com.gestionamateur.tpi.progav.modelo.Usuario;
+import com.gestionamateur.tpi.progav.seguridad.PoliticaPermisos;
 
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
@@ -25,10 +23,10 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
-import javax.swing.BorderFactory;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
+import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -36,7 +34,9 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
+import javax.swing.SwingConstants;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableColumnModel;
 
 /**
  * CU-04: Carga del acta de un partido por el arbitro designado.
@@ -68,6 +68,9 @@ public class FrmCargarResultado extends JFrame {
     private final JTextField txtFinReal = new JTextField(FORMATO_FECHA.format(new Date()), 16);
     private final JLabel lblMarcador = new JLabel("Marcador: -");
     private final JLabel lblDetalle = new JLabel(" ");
+    private final JButton btnAgregar = new JButton("Agregar");
+    private final JButton btnQuitar = new JButton("Quitar seleccionada");
+    private final JButton btnCerrarActa = new JButton("Oficializar acta");
 
     private final DefaultTableModel modeloTabla = new DefaultTableModel(
             new Object[]{"Min.", "Incidencia", "Jugador", "Observación"}, 0) {
@@ -89,111 +92,187 @@ public class FrmCargarResultado extends JFrame {
     }
 
     private void initComponents() {
-        JPanel panelPrincipal = new JPanel(new BorderLayout(10, 10));
-        panelPrincipal.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
-        panelPrincipal.setBackground(Color.WHITE);
+        JPanel panelPrincipal = new JPanel(new BorderLayout(12, 12));
+        EstilosUI.estilizarVentana(panelPrincipal);
 
-        // --- Encabezado ---
+        JPanel panelTitulo = EstilosUI.crearEncabezado(
+                "Acta de partido",
+                "Carga de goles, tarjetas, incidencias y cierre oficial del encuentro (CU-04)");
+
+        // --- Datos del partido ---
         JPanel panelEncabezado = new JPanel(new GridBagLayout());
-        panelEncabezado.setBackground(Color.WHITE);
+        EstilosUI.estilizarTarjeta(panelEncabezado);
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(4, 4, 4, 4);
+        gbc.insets = new Insets(5, 6, 5, 10);
         gbc.anchor = GridBagConstraints.WEST;
 
-        JLabel titulo = new JLabel("Acta de partido");
-        titulo.setFont(new Font("Segoe UI", Font.BOLD, 20));
-        titulo.setForeground(new Color(0x12, 0x38, 0x5C));
+        JLabel lblPartido = new JLabel("Partido asignado:");
+        EstilosUI.estilizarEtiquetaCampo(lblPartido);
         gbc.gridx = 0;
         gbc.gridy = 0;
-        gbc.gridwidth = 4;
-        panelEncabezado.add(titulo, gbc);
+        panelEncabezado.add(lblPartido, gbc);
 
-        gbc.gridwidth = 1;
-        gbc.gridy = 1;
-        panelEncabezado.add(new JLabel("Partido asignado:"), gbc);
+        EstilosUI.estilizarCombo(cmbPartido);
+        cmbPartido.setPreferredSize(new Dimension(340, 30));
         gbc.gridx = 1;
         gbc.gridwidth = 2;
-        cmbPartido.setPreferredSize(new Dimension(320, 26));
+        gbc.weightx = 0.6;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
         panelEncabezado.add(cmbPartido, gbc);
+
+        EstilosUI.estilizarEstadoInfo(lblDetalle);
         gbc.gridx = 3;
         gbc.gridwidth = 1;
-        lblDetalle.setForeground(new Color(0x3A, 0x55, 0x68));
+        gbc.weightx = 0.4;
         panelEncabezado.add(lblDetalle, gbc);
 
+        JLabel lblFinReal = new JLabel("Hora real de fin:");
+        EstilosUI.estilizarEtiquetaCampo(lblFinReal);
         gbc.gridx = 0;
-        gbc.gridy = 2;
-        panelEncabezado.add(new JLabel("Hora real de fin:"), gbc);
+        gbc.gridy = 1;
+        gbc.weightx = 0;
+        gbc.fill = GridBagConstraints.NONE;
+        panelEncabezado.add(lblFinReal, gbc);
+
+        EstilosUI.estilizarCampoTexto(txtFinReal, "dd/MM/yyyy HH:mm");
         gbc.gridx = 1;
+        gbc.weightx = 0.4;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
         panelEncabezado.add(txtFinReal, gbc);
+
+        EstilosUI.estilizarIndicadorAcento(lblMarcador);
         gbc.gridx = 2;
-        lblMarcador.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        lblMarcador.setForeground(new Color(0x12, 0x38, 0x5C));
+        gbc.gridwidth = 2;
+        gbc.weightx = 0.6;
         panelEncabezado.add(lblMarcador, gbc);
 
         // --- Alta de incidencia ---
         JPanel panelAlta = new JPanel(new GridBagLayout());
-        panelAlta.setBackground(new Color(0xF4, 0xF8, 0xFB));
-        panelAlta.setBorder(BorderFactory.createTitledBorder("Registrar incidencia"));
+        EstilosUI.estilizarTarjetaConTitulo(panelAlta, "Registrar incidencia");
+        GridBagConstraints gbcAlta = new GridBagConstraints();
+        gbcAlta.insets = new Insets(5, 6, 5, 8);
+        gbcAlta.anchor = GridBagConstraints.WEST;
 
-        gbc.gridx = 0;
-        gbc.gridy = 0;
-        panelAlta.add(new JLabel("Jugador:"), gbc);
-        gbc.gridx = 1;
-        cmbJugador.setPreferredSize(new Dimension(230, 24));
-        panelAlta.add(cmbJugador, gbc);
-        gbc.gridx = 2;
-        panelAlta.add(new JLabel("Incidencia:"), gbc);
-        gbc.gridx = 3;
-        cmbIncidencia.setPreferredSize(new Dimension(150, 24));
-        panelAlta.add(cmbIncidencia, gbc);
-        gbc.gridx = 4;
-        panelAlta.add(new JLabel("Minuto:"), gbc);
-        gbc.gridx = 5;
-        panelAlta.add(txtMinuto, gbc);
+        JLabel lblJugador = new JLabel("Jugador:");
+        EstilosUI.estilizarEtiquetaCampo(lblJugador);
+        gbcAlta.gridx = 0;
+        gbcAlta.gridy = 0;
+        panelAlta.add(lblJugador, gbcAlta);
 
-        gbc.gridx = 0;
-        gbc.gridy = 1;
-        panelAlta.add(new JLabel("Tipo de expulsión:"), gbc);
-        gbc.gridx = 1;
-        cmbTipoExpulsion.setPreferredSize(new Dimension(150, 24));
-        panelAlta.add(cmbTipoExpulsion, gbc);
-        gbc.gridx = 2;
-        panelAlta.add(new JLabel("Observación:"), gbc);
-        gbc.gridx = 3;
-        gbc.gridwidth = 2;
-        panelAlta.add(txtObservacion, gbc);
-        gbc.gridx = 5;
-        gbc.gridwidth = 1;
+        EstilosUI.estilizarCombo(cmbJugador);
+        cmbJugador.setPreferredSize(new Dimension(230, 30));
+        gbcAlta.gridx = 1;
+        gbcAlta.weightx = 0.45;
+        gbcAlta.fill = GridBagConstraints.HORIZONTAL;
+        panelAlta.add(cmbJugador, gbcAlta);
 
-        JButton btnAgregar = new JButton("Agregar");
+        JLabel lblIncidencia = new JLabel("Incidencia:");
+        EstilosUI.estilizarEtiquetaCampo(lblIncidencia);
+        gbcAlta.gridx = 2;
+        gbcAlta.weightx = 0;
+        gbcAlta.fill = GridBagConstraints.NONE;
+        panelAlta.add(lblIncidencia, gbcAlta);
+
+        EstilosUI.estilizarCombo(cmbIncidencia);
+        cmbIncidencia.setPreferredSize(new Dimension(170, 30));
+        gbcAlta.gridx = 3;
+        gbcAlta.weightx = 0.35;
+        gbcAlta.fill = GridBagConstraints.HORIZONTAL;
+        panelAlta.add(cmbIncidencia, gbcAlta);
+
+        JLabel lblMinuto = new JLabel("Minuto:");
+        EstilosUI.estilizarEtiquetaCampo(lblMinuto);
+        gbcAlta.gridx = 4;
+        gbcAlta.weightx = 0;
+        gbcAlta.fill = GridBagConstraints.NONE;
+        panelAlta.add(lblMinuto, gbcAlta);
+
+        EstilosUI.estilizarCampoTexto(txtMinuto, "1");
+        gbcAlta.gridx = 5;
+        gbcAlta.weightx = 0.2;
+        gbcAlta.fill = GridBagConstraints.HORIZONTAL;
+        panelAlta.add(txtMinuto, gbcAlta);
+
+        JLabel lblExpulsion = new JLabel("Tipo de expulsión:");
+        EstilosUI.estilizarEtiquetaCampo(lblExpulsion);
+        gbcAlta.gridx = 0;
+        gbcAlta.gridy = 1;
+        gbcAlta.weightx = 0;
+        gbcAlta.fill = GridBagConstraints.NONE;
+        panelAlta.add(lblExpulsion, gbcAlta);
+
+        EstilosUI.estilizarCombo(cmbTipoExpulsion);
+        cmbTipoExpulsion.setPreferredSize(new Dimension(170, 30));
+        gbcAlta.gridx = 1;
+        gbcAlta.weightx = 0.45;
+        gbcAlta.fill = GridBagConstraints.HORIZONTAL;
+        panelAlta.add(cmbTipoExpulsion, gbcAlta);
+
+        JLabel lblObs = new JLabel("Observación:");
+        EstilosUI.estilizarEtiquetaCampo(lblObs);
+        gbcAlta.gridx = 2;
+        gbcAlta.weightx = 0;
+        gbcAlta.fill = GridBagConstraints.NONE;
+        panelAlta.add(lblObs, gbcAlta);
+
+        EstilosUI.estilizarCampoTexto(txtObservacion, "Detalle opcional de la jugada");
+        gbcAlta.gridx = 3;
+        gbcAlta.gridwidth = 3;
+        gbcAlta.weightx = 0.55;
+        gbcAlta.fill = GridBagConstraints.HORIZONTAL;
+        panelAlta.add(txtObservacion, gbcAlta);
+
+        EstilosUI.estilizarBotonSecundario(btnAgregar);
         btnAgregar.addActionListener(e -> agregarIncidencia());
-        gbc.gridy = 2;
-        panelAlta.add(btnAgregar, gbc);
 
-        JButton btnQuitar = new JButton("Quitar seleccionada");
+        EstilosUI.estilizarBotonAdvertencia(btnQuitar);
         btnQuitar.addActionListener(e -> quitarIncidencia());
-        gbc.gridx = 4;
-        panelAlta.add(btnQuitar, gbc);
+
+        JPanel panelBotonesAlta = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 8, 0));
+        panelBotonesAlta.setBackground(EstilosUI.BG_SURFACE);
+        panelBotonesAlta.add(btnAgregar);
+        panelBotonesAlta.add(btnQuitar);
+        gbcAlta.gridx = 0;
+        gbcAlta.gridy = 2;
+        gbcAlta.gridwidth = 6;
+        gbcAlta.weightx = 1.0;
+        gbcAlta.fill = GridBagConstraints.HORIZONTAL;
+        panelAlta.add(panelBotonesAlta, gbcAlta);
 
         // --- Tabla de incidencias ---
         JScrollPane scroll = new JScrollPane(tablaIncidencias);
-        scroll.setPreferredSize(new Dimension(760, 220));
+        scroll.setPreferredSize(new Dimension(820, 200));
+        EstilosUI.estilizarTabla(tablaIncidencias, scroll);
+        TableColumnModel columnas = tablaIncidencias.getColumnModel();
+        if (columnas.getColumnCount() >= 4) {
+            columnas.getColumn(0).setPreferredWidth(65);
+            columnas.getColumn(0).setMaxWidth(90);
+            columnas.getColumn(0).setCellRenderer(EstilosUI.crearRendererCebra(SwingConstants.CENTER));
+        }
 
         // --- Acciones ---
-        JPanel panelAcciones = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 6));
-        JButton btnCerrarActa = new JButton("Oficializar acta");
+        EstilosUI.estilizarBotonPrimario(btnCerrarActa);
         btnCerrarActa.addActionListener(e -> oficializarActa());
+
         JButton btnVolver = new JButton("Volver al menú");
+        EstilosUI.estilizarBotonNeutro(btnVolver);
         btnVolver.addActionListener(e -> dispose());
-        panelAcciones.add(btnCerrarActa);
-        panelAcciones.add(btnVolver);
 
-        JPanel panelCentro = new JPanel(new BorderLayout(6, 6));
-        panelCentro.setBackground(Color.WHITE);
-        panelCentro.add(panelAlta, BorderLayout.NORTH);
-        panelCentro.add(scroll, BorderLayout.CENTER);
+        JPanel panelAcciones = EstilosUI.crearBarraAcciones(
+                new JComponent[]{btnCerrarActa},
+                new JComponent[]{btnVolver});
 
-        panelPrincipal.add(panelEncabezado, BorderLayout.NORTH);
+        JPanel panelCentro = new JPanel(new BorderLayout(12, 12));
+        panelCentro.setBackground(EstilosUI.BG_CANVAS);
+        panelCentro.add(panelEncabezado, BorderLayout.NORTH);
+
+        JPanel panelCuerpo = new JPanel(new BorderLayout(12, 12));
+        panelCuerpo.setBackground(EstilosUI.BG_CANVAS);
+        panelCuerpo.add(panelAlta, BorderLayout.NORTH);
+        panelCuerpo.add(scroll, BorderLayout.CENTER);
+        panelCentro.add(panelCuerpo, BorderLayout.CENTER);
+
+        panelPrincipal.add(panelTitulo, BorderLayout.NORTH);
         panelPrincipal.add(panelCentro, BorderLayout.CENTER);
         panelPrincipal.add(panelAcciones, BorderLayout.SOUTH);
 
@@ -202,7 +281,7 @@ public class FrmCargarResultado extends JFrame {
 
         setContentPane(panelPrincipal);
         pack();
-        setMinimumSize(new Dimension(820, 560));
+        setMinimumSize(new Dimension(920, 600));
     }
 
     private void cargarTipos() {
@@ -214,22 +293,41 @@ public class FrmCargarResultado extends JFrame {
         cmbTipoExpulsion.setEnabled(false);
     }
 
-    /** CU-04: solo se ofrecen los partidos asignados al arbitro autenticado. */
+    /** CU-04: para ARBITRO filtra por designacion; para ADMIN/ORG ofrece todos los pendientes. */
     private void cargarPartidosAsignados() {
         partidosAsignados = new ArrayList<>();
+        boolean autorizado = PoliticaPermisos.tienePermisoOperacion(operador, PoliticaPermisos.ModuloMenu.CARGAR_ACTAS);
+        btnAgregar.setEnabled(autorizado);
+        btnQuitar.setEnabled(autorizado);
+        btnCerrarActa.setEnabled(autorizado);
+        if (!autorizado) {
+            cmbPartido.setModel(new DefaultComboBoxModel<>());
+            cmbPartido.setEnabled(false);
+            partidoSeleccionado = null;
+            lblDetalle.setText("Acceso denegado: requiere sesión de Árbitro, Organizador o Administrador.");
+            return;
+        }
+        cmbPartido.setEnabled(true);
+        boolean esOrganizadorOAdmin = operador.getRol() == TiposDatos.Rol.ADMINISTRADOR
+                || operador.getRol() == TiposDatos.Rol.ORGANIZADOR;
         try {
             for (Partido p : partidoDAO.buscarPendientesDeFinalizacion()) {
-                if (p.getArbitroDesignado() == null || p.getArbitroDesignado().getId() == null) {
+                if (p.getEstadoPartido() == TiposDatos.EstadoPartido.SUSPENDIDO
+                        || p.getEstadoPartido() == TiposDatos.EstadoPartido.POSTERGADO) {
                     continue;
                 }
-                if (operador != null && operador.getId() != null
-                        && !p.getArbitroDesignado().getId().equals(operador.getId())) {
-                    continue;
+                if (!esOrganizadorOAdmin) {
+                    if (p.getArbitroDesignado() == null || p.getArbitroDesignado().getId() == null) {
+                        continue;
+                    }
+                    if (!p.getArbitroDesignado().getId().equals(operador.getId())) {
+                        continue;
+                    }
                 }
                 partidosAsignados.add(p);
             }
         } catch (Exception e) {
-            lblDetalle.setText("No se pudieron consultar los partidos asignados.");
+            lblDetalle.setText("No se pudieron consultar los partidos pendientes.");
         }
 
         DefaultComboBoxModel<String> modelo = new DefaultComboBoxModel<>();
@@ -241,7 +339,10 @@ public class FrmCargarResultado extends JFrame {
         if (!partidosAsignados.isEmpty()) {
             seleccionarPartido();
         } else {
-            lblDetalle.setText("No hay partidos pendientes asignados a este arbitro.");
+            partidoSeleccionado = null;
+            lblDetalle.setText(esOrganizadorOAdmin
+                    ? "No hay partidos pendientes disponibles para oficializar."
+                    : "No hay partidos pendientes asignados a este árbitro.");
         }
     }
 
@@ -380,6 +481,12 @@ public class FrmCargarResultado extends JFrame {
     }
 
     private void oficializarActa() {
+        if (!PoliticaPermisos.tienePermisoOperacion(operador, PoliticaPermisos.ModuloMenu.CARGAR_ACTAS)) {
+            JOptionPane.showMessageDialog(this,
+                    "Acceso denegado: requiere sesión autorizada de Árbitro, Organizador o Administrador.",
+                    "Acceso denegado", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
         if (partidoSeleccionado == null) {
             JOptionPane.showMessageDialog(this, "Seleccione el partido a oficializar.", "Acta", JOptionPane.WARNING_MESSAGE);
             return;

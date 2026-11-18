@@ -1,63 +1,104 @@
 package com.gestionamateur.tpi.progav.vista;
 
-import com.gestionamateur.tpi.progav.modelo.TiposDatos;
+import com.gestionamateur.tpi.progav.controlador.GestorUsuarios;
 import com.gestionamateur.tpi.progav.modelo.Usuario;
+import com.gestionamateur.tpi.progav.seguridad.PoliticaPermisos;
+import com.gestionamateur.tpi.progav.seguridad.PoliticaPermisos.ModuloMenu;
+import com.gestionamateur.tpi.progav.servicio.AuthService;
+
+import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
+import java.awt.Rectangle;
+import java.util.function.Supplier;
+
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JViewport;
+import javax.swing.Scrollable;
 
 public class FrmPrincipal extends javax.swing.JFrame {
 
     private Usuario usuarioActual;
+    private final AuthService authService;
 
     // Sobrecarga de Constructor 1: Recibe el usuario logueado para manejar permisos
     public FrmPrincipal(Usuario usuario) {
+        this(usuario, null);
+    }
+
+    public FrmPrincipal(Usuario usuario, AuthService authService) {
         this.usuarioActual = usuario;
+        this.authService = authService;
         initComponents();
         this.setLocationRelativeTo(null);
+        aplicarPermisosYEstilos();
+    }
 
-        // Modificación dinámica de la GUI según el Rol
-        if (usuario != null && usuario.getRol() != null) {
-            lblBienvenida.setText("Usuario: " + usuario.getNombre() + " | Rol: " + usuario.getRol().toString());
+    // Sobrecarga de Constructor 2: Vacío por defecto (fail-closed como Invitado)
+    public FrmPrincipal() {
+        this(null, null);
+    }
 
-            // Lógica de Permisos: cada módulo se habilita según el rol que lo puede usar.
-            TiposDatos.Rol rol = usuario.getRol();
-            boolean esOrganizador = (rol == TiposDatos.Rol.ADMINISTRADOR || rol == TiposDatos.Rol.ORGANIZADOR);
-            boolean esArbitro = (rol == TiposDatos.Rol.ARBITRO);
-            boolean esCapitan = (rol == TiposDatos.Rol.CAPITAN);
-
-            btnGestionarEquipos.setEnabled(esOrganizador || esCapitan);
-            btnAltaJugadores.setEnabled(esOrganizador || esCapitan);
-            btnGestionarCanchas.setEnabled(esOrganizador);
-            btnProgramarPartidos.setEnabled(esOrganizador);
-            btnCargarActas.setEnabled(esOrganizador || esArbitro);
-            btnSuspenderPartidos.setEnabled(esOrganizador);
-            btnTribunal.setEnabled(esOrganizador);
-            btnReclamos.setEnabled(esOrganizador);
-            btnCredenciales.setEnabled(esOrganizador);
-            btnTorneos.setEnabled(esOrganizador);
-            btnGestorUsuarios.setEnabled(rol == TiposDatos.Rol.ADMINISTRADOR);
-            btnConfiguracion.setEnabled(rol == TiposDatos.Rol.ADMINISTRADOR);
-            btnReportes.setEnabled(esOrganizador);
+    private void aplicarPermisosYEstilos() {
+        if (PoliticaPermisos.esSesionAutenticada(usuarioActual)) {
+            EstilosUI.estilizarIndicadorAcento(lblBienvenida);
+            lblBienvenida.setText("Usuario: " + usuarioActual.getNombre() + " | Rol: " + usuarioActual.getRol().toString());
         } else {
+            EstilosUI.estilizarEstadoInfo(lblBienvenida);
             lblBienvenida.setText("Usuario: Invitado (Acceso Público de Solo Lectura)");
-            btnGestionarEquipos.setEnabled(false);
-            btnAltaJugadores.setEnabled(false);
-            btnGestionarCanchas.setEnabled(false);
-            btnProgramarPartidos.setEnabled(false);
-            btnCargarActas.setEnabled(false);
-            btnSuspenderPartidos.setEnabled(false);
-            btnTribunal.setEnabled(false);
-            btnReclamos.setEnabled(false);
-            btnCredenciales.setEnabled(false);
-            btnTorneos.setEnabled(false);
-            btnGestorUsuarios.setEnabled(false);
-            btnConfiguracion.setEnabled(false);
-            btnReportes.setEnabled(false);
+        }
+
+        configurarBotonModulo(btnGestionarEquipos, ModuloMenu.GESTIONAR_EQUIPOS);
+        configurarBotonModulo(btnAltaJugadores, ModuloMenu.ALTA_JUGADORES);
+        configurarBotonModulo(btnGestionarCanchas, ModuloMenu.GESTIONAR_CANCHAS);
+        configurarBotonModulo(btnCredenciales, ModuloMenu.IMPRIMIR_CREDENCIALES);
+        configurarBotonModulo(btnTorneos, ModuloMenu.GESTIONAR_TORNEOS);
+        configurarBotonModulo(btnProgramarPartidos, ModuloMenu.PROGRAMAR_PARTIDOS);
+        configurarBotonModulo(btnCargarActas, ModuloMenu.CARGAR_ACTAS);
+        configurarBotonModulo(btnSuspenderPartidos, ModuloMenu.POSTERGAR_SUSPENDER_PARTIDOS);
+        configurarBotonModulo(btnTribunal, ModuloMenu.TRIBUNAL_DISCIPLINARIO);
+        configurarBotonModulo(btnReclamos, ModuloMenu.RESOLVER_RECLAMOS);
+        configurarBotonModulo(btnReportes, ModuloMenu.REPORTES);
+        configurarBotonModulo(btnConsultaPublica, ModuloMenu.CONSULTA_PUBLICA);
+        configurarBotonModulo(btnGestorUsuarios, ModuloMenu.GESTIONAR_USUARIOS);
+        configurarBotonModulo(btnConfiguracion, ModuloMenu.CONFIGURACION_GENERAL);
+
+        boolean puedeCerrar = PoliticaPermisos.puedeCerrarSesion(usuarioActual);
+        btnCerrarSesion.setEnabled(puedeCerrar);
+        if (puedeCerrar) {
+            EstilosUI.estilizarBotonPeligro(btnCerrarSesion);
+            btnCerrarSesion.setToolTipText("Finaliza la sesión activa y regresa al inicio de sesión.");
+        } else {
+            EstilosUI.estilizarBotonDenegado(btnCerrarSesion);
+            btnCerrarSesion.setToolTipText("No hay una sesión autenticada activa.");
         }
     }
 
-    // Sobrecarga de Constructor 2: Vacío por defecto
-    public FrmPrincipal() {
-        initComponents();
-        this.setLocationRelativeTo(null);
+    private void configurarBotonModulo(JButton boton, ModuloMenu modulo) {
+        boton.setText(modulo.getEtiquetaMenu());
+        boolean permitido = PoliticaPermisos.tienePermiso(usuarioActual, modulo);
+        boton.setEnabled(permitido);
+        EstilosUI.estilizarBotonModulo(boton, permitido);
+        boton.setToolTipText(PoliticaPermisos.obtenerTooltip(usuarioActual, modulo));
+    }
+
+    private void abrirModulo(ModuloMenu modulo, Supplier<JFrame> constructorVentana) {
+        if (!PoliticaPermisos.tienePermiso(usuarioActual, modulo)) {
+            JOptionPane.showMessageDialog(this,
+                    "Acceso denegado: " + PoliticaPermisos.obtenerTooltip(usuarioActual, modulo),
+                    "Permisos insuficientes", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        JFrame ventana = constructorVentana.get();
+        ventana.setVisible(true);
     }
 
     @SuppressWarnings("unchecked")
@@ -78,253 +119,272 @@ public class FrmPrincipal extends javax.swing.JFrame {
         btnGestorUsuarios = new javax.swing.JButton();
         btnConfiguracion = new javax.swing.JButton();
         btnReportes = new javax.swing.JButton();
+        btnConsultaPublica = new javax.swing.JButton();
         btnCerrarSesion = new javax.swing.JButton();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
         setTitle("Menú Principal - Torneo Fútbol");
 
-        lblTitulo.setFont(new java.awt.Font("Segoe UI", 1, 24));
+        JPanel panel = new JPanel(new BorderLayout(12, 6));
+        EstilosUI.estilizarVentana(panel);
+
+        // --- Encabezado institucional y barra de sesión ---
+        JPanel panelSuperior = new JPanel(new BorderLayout(0, 6));
+        panelSuperior.setBackground(EstilosUI.BG_CANVAS);
+
+        JPanel panelEncabezado = EstilosUI.crearEncabezado(
+                "Menú Principal — Torneo Fútbol",
+                "Centro de navegación deportiva y administrativa");
+        panelSuperior.add(panelEncabezado, BorderLayout.NORTH);
+
+        JPanel panelSesion = new JPanel(new GridBagLayout());
+        EstilosUI.estilizarTarjeta(panelSesion);
+
+        GridBagConstraints gbcSes = new GridBagConstraints();
+        gbcSes.insets = new Insets(0, 2, 2, 8);
+        gbcSes.anchor = GridBagConstraints.WEST;
+        gbcSes.gridx = 0;
+        gbcSes.gridy = 0;
+        gbcSes.weightx = 1.0;
+        gbcSes.fill = GridBagConstraints.HORIZONTAL;
+
         lblTitulo.setText("Panel de Control");
-
-        lblBienvenida.setText("Usuario: Invitado");
-
-        btnGestionarEquipos.setText("Gestionar Equipos (Alta)");
-        btnGestionarEquipos.addActionListener(new java.awt.event.ActionListener() {
-            @Override
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                btnGestionarEquiposActionPerformed(evt);
-            }
-        });
-
-        btnAltaJugadores.setText("Dar de Alta Jugadores");
-        btnAltaJugadores.addActionListener(new java.awt.event.ActionListener() {
-            @Override
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                btnAltaJugadoresActionPerformed(evt);
-            }
-        });
-
-        btnGestionarCanchas.setText("Gestionar Sedes / Canchas");
-        btnGestionarCanchas.addActionListener(new java.awt.event.ActionListener() {
-            @Override
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                btnGestionarCanchasActionPerformed(evt);
-            }
-        });
-
-        btnProgramarPartidos.setText("Programar Partidos");
-        btnProgramarPartidos.addActionListener(new java.awt.event.ActionListener() {
-            @Override
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                btnProgramarPartidosActionPerformed(evt);
-            }
-        });
-
-        btnCargarActas.setText("Cargar Actas de Partido");
-        btnCargarActas.addActionListener(new java.awt.event.ActionListener() {
-            @Override
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                btnCargarActasActionPerformed(evt);
-            }
-        });
-
-        btnSuspenderPartidos.setText("Postergar / Suspender Partido");
-        btnSuspenderPartidos.addActionListener(new java.awt.event.ActionListener() {
-            @Override
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                btnSuspenderPartidosActionPerformed(evt);
-            }
-        });
-
-        btnTribunal.setText("Tribunal Disciplinario");
-        btnTribunal.addActionListener(new java.awt.event.ActionListener() {
-            @Override
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                btnTribunalActionPerformed(evt);
-            }
-        });
-
-        btnReclamos.setText("Reclamos Pendientes");
-        btnReclamos.addActionListener(new java.awt.event.ActionListener() {
-            @Override
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                btnReclamosActionPerformed(evt);
-            }
-        });
-
-        btnCredenciales.setText("Credenciales de Jugador");
-        btnCredenciales.addActionListener(new java.awt.event.ActionListener() {
-            @Override
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                FrmCredencialJugador ventana = new FrmCredencialJugador();
-                ventana.setVisible(true);
-            }
-        });
-
-        btnTorneos.setText("Gestionar Torneos");
-        btnTorneos.addActionListener(new java.awt.event.ActionListener() {
-            @Override
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                FrmTorneos ventana = new FrmTorneos(usuarioActual);
-                ventana.setVisible(true);
-            }
-        });
-
-        btnGestorUsuarios.setText("Gestionar Usuarios");
-        btnGestorUsuarios.addActionListener(new java.awt.event.ActionListener() {
-            @Override
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                FrmGestorUsuarios ventana = new FrmGestorUsuarios(usuarioActual);
-                ventana.setVisible(true);
-            }
-        });
-
-        btnConfiguracion.setText("Configuración General");
-        btnConfiguracion.addActionListener(new java.awt.event.ActionListener() {
-            @Override
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                FrmConfiguracion ventana = new FrmConfiguracion(usuarioActual);
-                ventana.setVisible(true);
-            }
-        });
-
-        btnReportes.setText("Reportes");
-        btnReportes.addActionListener(new java.awt.event.ActionListener() {
-            @Override
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                FrmReportes ventana = new FrmReportes(usuarioActual);
-                ventana.setVisible(true);
-            }
-        });
+        EstilosUI.estilizarTituloSeccion(lblTitulo);
+        panelSesion.add(lblTitulo, gbcSes);
 
         btnCerrarSesion.setText("Cerrar Sesión");
+        EstilosUI.estilizarBotonPeligro(btnCerrarSesion);
         btnCerrarSesion.addActionListener(new java.awt.event.ActionListener() {
             @Override
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 btnCerrarSesionActionPerformed(evt);
             }
         });
+        gbcSes.gridx = 1;
+        gbcSes.gridy = 0;
+        gbcSes.weightx = 0.0;
+        gbcSes.fill = GridBagConstraints.NONE;
+        gbcSes.anchor = GridBagConstraints.EAST;
+        gbcSes.insets = new Insets(0, 8, 2, 2);
+        panelSesion.add(btnCerrarSesion, gbcSes);
 
-        javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
-        getContentPane().setLayout(layout);
-        layout.setHorizontalGroup(
-            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(layout.createSequentialGroup()
-                .addContainerGap()
-                .addComponent(lblBienvenida)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                .addComponent(btnCerrarSesion)
-                .addContainerGap())
-            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
-                .addContainerGap(142, Short.MAX_VALUE)
-                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                    .addComponent(lblTitulo, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(btnGestionarEquipos, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(btnAltaJugadores, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(btnGestionarCanchas, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(btnProgramarPartidos, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(btnCargarActas, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(btnSuspenderPartidos, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(btnTribunal, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(btnReclamos, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(btnCredenciales, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(btnTorneos, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(btnGestorUsuarios, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(btnConfiguracion, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(btnReportes, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-                .addGap(133, 133, 133))
-        );
-        layout.setVerticalGroup(
-            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(layout.createSequentialGroup()
-                .addContainerGap()
-                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(lblBienvenida)
-                    .addComponent(btnCerrarSesion))
-                .addGap(30, 30, 30)
-                .addComponent(lblTitulo)
-                .addGap(42, 42, 42)
-                .addComponent(btnGestionarEquipos, javax.swing.GroupLayout.PREFERRED_SIZE, 40, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(18, 18, 18)
-                .addComponent(btnAltaJugadores, javax.swing.GroupLayout.PREFERRED_SIZE, 40, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(18, 18, 18)
-                .addComponent(btnGestionarCanchas, javax.swing.GroupLayout.PREFERRED_SIZE, 40, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(18, 18, 18)
-                .addComponent(btnProgramarPartidos, javax.swing.GroupLayout.PREFERRED_SIZE, 40, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(18, 18, 18)
-                .addComponent(btnCargarActas, javax.swing.GroupLayout.PREFERRED_SIZE, 40, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(18, 18, 18)
-                .addComponent(btnSuspenderPartidos, javax.swing.GroupLayout.PREFERRED_SIZE, 40, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(18, 18, 18)
-                .addComponent(btnTribunal, javax.swing.GroupLayout.PREFERRED_SIZE, 40, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(18, 18, 18)
-                .addComponent(btnReclamos, javax.swing.GroupLayout.PREFERRED_SIZE, 40, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(18, 18, 18)
-                .addComponent(btnCredenciales, javax.swing.GroupLayout.PREFERRED_SIZE, 40, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(18, 18, 18)
-                .addComponent(btnTorneos, javax.swing.GroupLayout.PREFERRED_SIZE, 40, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(18, 18, 18)
-                .addComponent(btnGestorUsuarios, javax.swing.GroupLayout.PREFERRED_SIZE, 40, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(18, 18, 18)
-                .addComponent(btnConfiguracion, javax.swing.GroupLayout.PREFERRED_SIZE, 40, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(18, 18, 18)
-                .addComponent(btnReportes, javax.swing.GroupLayout.PREFERRED_SIZE, 40, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(40, Short.MAX_VALUE))
-        );
+        lblBienvenida.setText("Usuario: Invitado");
+        EstilosUI.estilizarEstadoInfo(lblBienvenida);
+        gbcSes.gridx = 0;
+        gbcSes.gridy = 1;
+        gbcSes.gridwidth = 2;
+        gbcSes.weightx = 1.0;
+        gbcSes.fill = GridBagConstraints.HORIZONTAL;
+        gbcSes.anchor = GridBagConstraints.WEST;
+        gbcSes.insets = new Insets(0, 2, 0, 2);
+        panelSesion.add(lblBienvenida, gbcSes);
+
+        panelSuperior.add(panelSesion, BorderLayout.CENTER);
+
+        // --- Configuración funcional y visual de botones ---
+        btnGestionarEquipos.setText(ModuloMenu.GESTIONAR_EQUIPOS.getEtiquetaMenu());
+        btnGestionarEquipos.addActionListener(evt -> abrirModulo(ModuloMenu.GESTIONAR_EQUIPOS, () -> new FrmAltaEquipo(usuarioActual)));
+
+        btnAltaJugadores.setText(ModuloMenu.ALTA_JUGADORES.getEtiquetaMenu());
+        btnAltaJugadores.addActionListener(evt -> abrirModulo(ModuloMenu.ALTA_JUGADORES, () -> new FrmAltaJugador(usuarioActual)));
+
+        btnGestionarCanchas.setText(ModuloMenu.GESTIONAR_CANCHAS.getEtiquetaMenu());
+        btnGestionarCanchas.addActionListener(evt -> abrirModulo(ModuloMenu.GESTIONAR_CANCHAS, () -> new FrmAltaCancha(usuarioActual)));
+
+        btnCredenciales.setText(ModuloMenu.IMPRIMIR_CREDENCIALES.getEtiquetaMenu());
+        btnCredenciales.addActionListener(evt -> abrirModulo(ModuloMenu.IMPRIMIR_CREDENCIALES, () -> new FrmCredencialJugador(usuarioActual)));
+
+        btnTorneos.setText(ModuloMenu.GESTIONAR_TORNEOS.getEtiquetaMenu());
+        btnTorneos.addActionListener(evt -> abrirModulo(ModuloMenu.GESTIONAR_TORNEOS, () -> new FrmTorneos(usuarioActual)));
+
+        btnProgramarPartidos.setText(ModuloMenu.PROGRAMAR_PARTIDOS.getEtiquetaMenu());
+        btnProgramarPartidos.addActionListener(evt -> abrirModulo(ModuloMenu.PROGRAMAR_PARTIDOS, () -> new FrmProgramarPartido(usuarioActual)));
+
+        btnCargarActas.setText(ModuloMenu.CARGAR_ACTAS.getEtiquetaMenu());
+        btnCargarActas.addActionListener(evt -> abrirModulo(ModuloMenu.CARGAR_ACTAS, () -> new FrmCargarResultado(usuarioActual)));
+
+        btnSuspenderPartidos.setText(ModuloMenu.POSTERGAR_SUSPENDER_PARTIDOS.getEtiquetaMenu());
+        btnSuspenderPartidos.addActionListener(evt -> abrirModulo(ModuloMenu.POSTERGAR_SUSPENDER_PARTIDOS, () -> new FrmSuspenderPartido(usuarioActual)));
+
+        btnTribunal.setText(ModuloMenu.TRIBUNAL_DISCIPLINARIO.getEtiquetaMenu());
+        btnTribunal.addActionListener(evt -> abrirModulo(ModuloMenu.TRIBUNAL_DISCIPLINARIO, () -> new FrmTribunal(usuarioActual)));
+
+        btnReclamos.setText(ModuloMenu.RESOLVER_RECLAMOS.getEtiquetaMenu());
+        btnReclamos.addActionListener(evt -> abrirModulo(ModuloMenu.RESOLVER_RECLAMOS, () -> new FrmReclamos(usuarioActual)));
+
+        btnReportes.setText(ModuloMenu.REPORTES.getEtiquetaMenu());
+        btnReportes.addActionListener(evt -> abrirModulo(ModuloMenu.REPORTES, () -> new FrmReportes(usuarioActual)));
+
+        btnConsultaPublica.setText(ModuloMenu.CONSULTA_PUBLICA.getEtiquetaMenu());
+        btnConsultaPublica.addActionListener(evt -> abrirModulo(ModuloMenu.CONSULTA_PUBLICA, () -> new FrmConsultaPublica(usuarioActual)));
+
+        btnGestorUsuarios.setText(ModuloMenu.GESTIONAR_USUARIOS.getEtiquetaMenu());
+        btnGestorUsuarios.addActionListener(evt -> abrirModulo(ModuloMenu.GESTIONAR_USUARIOS, () -> new FrmGestorUsuarios(usuarioActual)));
+
+        btnConfiguracion.setText(ModuloMenu.CONFIGURACION_GENERAL.getEtiquetaMenu());
+        btnConfiguracion.addActionListener(evt -> abrirModulo(ModuloMenu.CONFIGURACION_GENERAL, () -> new FrmConfiguracion(usuarioActual)));
+
+        // --- Tarjetas de navegación agrupadas por afinidad funcional ---
+        JPanel tarjetaEquiposYSedes = crearTarjetaModulo(
+                "Equipos, Jugadores y Canchas",
+                "Gestión de equipos, altas, canchas y carnets",
+                new JButton[]{btnGestionarEquipos, btnAltaJugadores, btnGestionarCanchas, btnCredenciales});
+
+        JPanel tarjetaCompetencia = crearTarjetaModulo(
+                "Competencia y Disciplina",
+                "Torneos, fixture, actas y tribunal",
+                new JButton[]{
+                    btnTorneos, btnProgramarPartidos, btnCargarActas,
+                    btnSuspenderPartidos, btnTribunal, btnReclamos
+                });
+
+        JPanel tarjetaConsultas = crearTarjetaModulo(
+                "Reportes y Consulta Pública",
+                "Informes oficiales y vista pública",
+                new JButton[]{btnReportes, btnConsultaPublica});
+
+        JPanel tarjetaAdministracion = crearTarjetaModulo(
+                "Administración del Sistema",
+                "Cuentas, roles y parámetros globales",
+                new JButton[]{btnGestorUsuarios, btnConfiguracion});
+
+        JPanel panelCentro = new PanelCentroScrollable();
+        panelCentro.setBackground(EstilosUI.BG_CANVAS);
+        panelCentro.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 4));
+
+        GridBagConstraints gbcCentro = new GridBagConstraints();
+        gbcCentro.weightx = 0.5;
+        gbcCentro.fill = GridBagConstraints.BOTH;
+        gbcCentro.anchor = GridBagConstraints.NORTH;
+
+        gbcCentro.gridx = 0;
+        gbcCentro.gridy = 0;
+        gbcCentro.weighty = 0.0;
+        gbcCentro.insets = new Insets(0, 0, 6, 6);
+        panelCentro.add(tarjetaEquiposYSedes, gbcCentro);
+
+        gbcCentro.gridx = 1;
+        gbcCentro.insets = new Insets(0, 6, 6, 0);
+        panelCentro.add(tarjetaCompetencia, gbcCentro);
+
+        gbcCentro.gridx = 0;
+        gbcCentro.gridy = 1;
+        gbcCentro.weighty = 0.0;
+        gbcCentro.insets = new Insets(0, 0, 0, 6);
+        panelCentro.add(tarjetaConsultas, gbcCentro);
+
+        gbcCentro.gridx = 1;
+        gbcCentro.insets = new Insets(0, 6, 0, 0);
+        panelCentro.add(tarjetaAdministracion, gbcCentro);
+
+        JScrollPane scrollCentro = new JScrollPane(
+                panelCentro,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollCentro.setBorder(BorderFactory.createEmptyBorder());
+        scrollCentro.setViewportBorder(null);
+        scrollCentro.setBackground(EstilosUI.BG_CANVAS);
+        scrollCentro.getViewport().setBackground(EstilosUI.BG_CANVAS);
+        scrollCentro.getVerticalScrollBar().setUnitIncrement(16);
+
+        panel.add(panelSuperior, BorderLayout.NORTH);
+        panel.add(scrollCentro, BorderLayout.CENTER);
+        setContentPane(panel);
 
         pack();
+        setMinimumSize(new Dimension(640, 480));
+        setSize(new Dimension(Math.max(getWidth(), 960), Math.max(getHeight(), 650)));
     }
 
-    private void btnGestionarEquiposActionPerformed(java.awt.event.ActionEvent evt) {
-        FrmAltaEquipo ventanaEquipos = new FrmAltaEquipo(usuarioActual);
-        ventanaEquipos.setVisible(true);
-    }
+    private JPanel crearTarjetaModulo(String titulo, String descripcion, JButton[] botones) {
+        JPanel tarjeta = new JPanel(new GridBagLayout());
+        EstilosUI.estilizarTarjetaConTitulo(tarjeta, titulo);
 
-    private void btnAltaJugadoresActionPerformed(java.awt.event.ActionEvent evt) {
-        FrmAltaJugador ventanaJugadores = new FrmAltaJugador(usuarioActual);
-        ventanaJugadores.setVisible(true);
-    }
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.weightx = 1.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.anchor = GridBagConstraints.NORTHWEST;
+        gbc.insets = new Insets(0, 2, 4, 2);
 
-    private void btnGestionarCanchasActionPerformed(java.awt.event.ActionEvent evt) {
-        FrmAltaCancha ventanaCanchas = new FrmAltaCancha(usuarioActual);
-        ventanaCanchas.setVisible(true);
-    }
+        JLabel lblDesc = new JLabel(descripcion);
+        EstilosUI.estilizarEstadoInfo(lblDesc);
+        tarjeta.add(lblDesc, gbc);
 
-    private void btnProgramarPartidosActionPerformed(java.awt.event.ActionEvent evt) {
-        FrmProgramarPartido ventanaPartidos = new FrmProgramarPartido(usuarioActual);
-        ventanaPartidos.setVisible(true);
-    }
+        for (int i = 0; i < botones.length; i++) {
+            JButton btn = botones[i];
+            Dimension pref = btn.getPreferredSize();
+            btn.setPreferredSize(new Dimension(pref.width, Math.max(pref.height, 30)));
+            gbc.gridy = i + 1;
+            gbc.insets = new Insets(0, 2, (i == botones.length - 1) ? 0 : 3, 2);
+            tarjeta.add(btn, gbc);
+        }
 
-    private void btnCargarActasActionPerformed(java.awt.event.ActionEvent evt) {
-        FrmCargarResultado ventanaActas = new FrmCargarResultado(usuarioActual);
-        ventanaActas.setVisible(true);
-    }
+        // Espaciador flexible para alinear tarjetas de distinta altura dentro de la misma fila
+        gbc.gridy = botones.length + 1;
+        gbc.weighty = 1.0;
+        gbc.fill = GridBagConstraints.BOTH;
+        gbc.insets = new Insets(0, 0, 0, 0);
+        JPanel relleno = new JPanel();
+        relleno.setOpaque(false);
+        tarjeta.add(relleno, gbc);
 
-    private void btnSuspenderPartidosActionPerformed(java.awt.event.ActionEvent evt) {
-        FrmSuspenderPartido ventana = new FrmSuspenderPartido(usuarioActual);
-        ventana.setVisible(true);
-    }
-
-    private void btnTribunalActionPerformed(java.awt.event.ActionEvent evt) {
-        FrmTribunal ventana = new FrmTribunal(usuarioActual);
-        ventana.setVisible(true);
-    }
-
-    private void btnReclamosActionPerformed(java.awt.event.ActionEvent evt) {
-        FrmReclamos ventana = new FrmReclamos(usuarioActual);
-        ventana.setVisible(true);
+        return tarjeta;
     }
 
     private void btnCerrarSesionActionPerformed(java.awt.event.ActionEvent evt) {
+        if (!PoliticaPermisos.puedeCerrarSesion(usuarioActual)) {
+            return;
+        }
+        if (authService != null) {
+            authService.cerrarSesion(usuarioActual);
+        } else {
+            new GestorUsuarios().cerrarSesion(usuarioActual);
+        }
+        this.usuarioActual = null;
+        aplicarPermisosYEstilos();
         FrmLogin login = new FrmLogin();
         login.setVisible(true);
         this.dispose();
+    }
+
+    private static final class PanelCentroScrollable extends JPanel implements Scrollable {
+        PanelCentroScrollable() {
+            super(new GridBagLayout());
+        }
+
+        @Override
+        public Dimension getPreferredScrollableViewportSize() {
+            return getPreferredSize();
+        }
+
+        @Override
+        public int getScrollableUnitIncrement(Rectangle visibleRect, int orientation, int direction) {
+            return 16;
+        }
+
+        @Override
+        public int getScrollableBlockIncrement(Rectangle visibleRect, int orientation, int direction) {
+            return 48;
+        }
+
+        @Override
+        public boolean getScrollableTracksViewportWidth() {
+            return true;
+        }
+
+        @Override
+        public boolean getScrollableTracksViewportHeight() {
+            return getParent() instanceof JViewport vp && vp.getHeight() > getPreferredSize().height;
+        }
     }
 
     private javax.swing.JButton btnAltaJugadores;
     private javax.swing.JButton btnCargarActas;
     private javax.swing.JButton btnCerrarSesion;
     private javax.swing.JButton btnConfiguracion;
+    private javax.swing.JButton btnConsultaPublica;
     private javax.swing.JButton btnCredenciales;
     private javax.swing.JButton btnGestorUsuarios;
     private javax.swing.JButton btnReclamos;

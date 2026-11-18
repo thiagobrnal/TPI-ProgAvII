@@ -4,13 +4,12 @@ import com.gestionamateur.tpi.progav.modelo.Fase;
 import com.gestionamateur.tpi.progav.modelo.Torneo;
 import com.gestionamateur.tpi.progav.modelo.TorneoExcepcion;
 import com.gestionamateur.tpi.progav.modelo.Usuario;
+import com.gestionamateur.tpi.progav.seguridad.PoliticaPermisos;
 import com.gestionamateur.tpi.progav.servicio.TorneoService;
 
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
-import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
@@ -20,10 +19,11 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
-import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
+import javax.swing.JComponent;
+import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -31,17 +31,14 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
-import javax.swing.ListSelectionModel;
+import javax.swing.SwingConstants;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableColumnModel;
 
 /**
- * CU-15: Gestion de torneos (actor: Administrador).
- * Expone la capa de presentación sobre {@link TorneoService}: alta de torneo,
- * esquema de fases, cambio de estado y consulta del listado.
- *
- * Todas las operaciones que mutan la base de datos se delegan al servicio de dominio
- * pasando siempre el operador de la sesión, de modo que la autorización del
- * servicio (fail-closed ante operador nulo o sin permisos) se mantiene intacta.
+ * CU-15: Gestion de torneos (actor: Administrador / Organizador).
+ * Expone la capa de presentación sobre {@link TorneoService}: alta, edición,
+ * esquema de fases (alta, edición, quita sin uso), cambio de estado y baja lógica (CANCELADO).
  */
 public class FrmTorneos extends JFrame {
 
@@ -65,6 +62,13 @@ public class FrmTorneos extends JFrame {
     private final JTable tablaTorneos = new JTable(modeloTabla);
     private final JLabel lblInfo = new JLabel(" ");
     private final JLabel lblSeleccion = new JLabel(" ");
+    private final JButton btnActualizar = new JButton("Actualizar listado");
+    private final JButton btnCrear = new JButton("Crear torneo");
+    private final JButton btnEditar = new JButton("Editar torneo");
+    private final JButton btnVerFases = new JButton("Fases del torneo");
+    private final JButton btnAgregarFase = new JButton("Agregar fase");
+    private final JButton btnCambiarEstado = new JButton("Cambiar estado");
+    private final JButton btnCancelarTorneo = new JButton("Cancelar torneo");
 
     public FrmTorneos(Usuario operador) {
         this.operador = operador;
@@ -76,90 +80,121 @@ public class FrmTorneos extends JFrame {
     }
 
     private void initComponents() {
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
-        panel.setBackground(Color.WHITE);
+        JPanel panel = new JPanel(new BorderLayout(12, 12));
+        EstilosUI.estilizarVentana(panel);
+
+        JPanel panelEncabezado = EstilosUI.crearEncabezado(
+                "Gestión de torneos",
+                describirOperador());
 
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(4, 4, 4, 4);
         gbc.anchor = GridBagConstraints.WEST;
 
         JPanel panelSup = new JPanel(new GridBagLayout());
-        panelSup.setBackground(Color.WHITE);
+        EstilosUI.estilizarTarjeta(panelSup);
 
-        JLabel titulo = new JLabel("Gestión de torneos");
-        titulo.setFont(new Font("Segoe UI", Font.BOLD, 20));
-        titulo.setForeground(new Color(0x12, 0x38, 0x5C));
+        JLabel lblSeccion = new JLabel("Torneos registrados");
+        EstilosUI.estilizarTituloSeccion(lblSeccion);
         gbc.gridx = 0;
         gbc.gridy = 0;
         gbc.gridwidth = 3;
-        panelSup.add(titulo, gbc);
+        gbc.weightx = 1.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        panelSup.add(lblSeccion, gbc);
 
-        gbc.gridwidth = 1;
+        EstilosUI.estilizarTextoPrimario(lblSeleccion);
         gbc.gridy = 1;
-        JLabel lblOperador = new JLabel(describirOperador());
-        lblOperador.setForeground(new Color(0x3A, 0x55, 0x68));
-        panelSup.add(lblOperador, gbc);
-
-        gbc.gridx = 0;
-        gbc.gridy = 2;
-        gbc.gridwidth = 3;
-        lblSeleccion.setForeground(new Color(0x3A, 0x55, 0x68));
         panelSup.add(lblSeleccion, gbc);
 
-        gbc.gridx = 0;
-        gbc.gridy = 3;
-        gbc.gridwidth = 3;
-        lblInfo.setForeground(new Color(0x3A, 0x55, 0x68));
+        EstilosUI.estilizarEstadoInfo(lblInfo);
+        gbc.gridy = 2;
         panelSup.add(lblInfo, gbc);
 
-        tablaTorneos.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         tablaTorneos.setAutoCreateRowSorter(false);
         tablaTorneos.getSelectionModel().addListSelectionListener(e -> actualizarSeleccion());
 
         JScrollPane scroll = new JScrollPane(tablaTorneos);
         scroll.setPreferredSize(new Dimension(900, 300));
+        EstilosUI.estilizarTabla(tablaTorneos, scroll);
+        TableColumnModel columnas = tablaTorneos.getColumnModel();
+        if (columnas.getColumnCount() >= 6) {
+            columnas.getColumn(0).setPreferredWidth(55);
+            columnas.getColumn(0).setMaxWidth(75);
+            columnas.getColumn(0).setCellRenderer(EstilosUI.crearRendererCebra(SwingConstants.CENTER));
+            columnas.getColumn(3).setPreferredWidth(70);
+            columnas.getColumn(3).setCellRenderer(EstilosUI.crearRendererCebra(SwingConstants.CENTER));
+        }
 
-        JPanel panelAcciones = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 6));
-        JButton btnActualizar = new JButton("Actualizar listado");
+        EstilosUI.estilizarBotonNeutro(btnActualizar);
         btnActualizar.addActionListener(e -> cargarTorneos());
-        JButton btnCrear = new JButton("Crear torneo");
-        btnCrear.addActionListener(e -> crearTorneo());
-        JButton btnVerFases = new JButton("Ver fases del torneo");
-        btnVerFases.addActionListener(e -> verFases());
-        JButton btnAgregarFase = new JButton("Agregar fase");
-        btnAgregarFase.addActionListener(e -> agregarFase());
-        JButton btnCambiarEstado = new JButton("Cambiar estado");
-        btnCambiarEstado.addActionListener(e -> cambiarEstado());
-        JButton btnVolver = new JButton("Volver al menú");
-        btnVolver.addActionListener(e -> dispose());
-        panelAcciones.add(btnActualizar);
-        panelAcciones.add(btnCrear);
-        panelAcciones.add(btnVerFases);
-        panelAcciones.add(btnAgregarFase);
-        panelAcciones.add(btnCambiarEstado);
-        panelAcciones.add(btnVolver);
 
-        JPanel panelCentro = new JPanel(new BorderLayout(6, 6));
-        panelCentro.setBackground(Color.WHITE);
+        EstilosUI.estilizarBotonPrimario(btnCrear);
+        btnCrear.addActionListener(e -> crearTorneo());
+
+        EstilosUI.estilizarBotonSecundario(btnEditar);
+        btnEditar.addActionListener(e -> editarTorneo());
+
+        EstilosUI.estilizarBotonNeutro(btnVerFases);
+        btnVerFases.addActionListener(e -> verFases());
+
+        EstilosUI.estilizarBotonSecundario(btnAgregarFase);
+        btnAgregarFase.addActionListener(e -> agregarFase());
+
+        EstilosUI.estilizarBotonAdvertencia(btnCambiarEstado);
+        btnCambiarEstado.addActionListener(e -> cambiarEstado());
+
+        EstilosUI.estilizarBotonPeligro(btnCancelarTorneo);
+        btnCancelarTorneo.addActionListener(e -> cancelarTorneo());
+
+        JButton btnVolver = new JButton("Volver al menú");
+        EstilosUI.estilizarBotonNeutro(btnVolver);
+        btnVolver.addActionListener(e -> dispose());
+
+        JPanel panelAcciones = EstilosUI.crearBarraAcciones(
+                new JComponent[]{btnActualizar, btnCrear, btnEditar, btnVerFases, btnAgregarFase, btnCambiarEstado, btnCancelarTorneo},
+                new JComponent[]{btnVolver});
+
+        JPanel panelCentro = new JPanel(new BorderLayout(12, 12));
+        panelCentro.setBackground(EstilosUI.BG_CANVAS);
         panelCentro.add(panelSup, BorderLayout.NORTH);
         panelCentro.add(scroll, BorderLayout.CENTER);
 
+        panel.add(panelEncabezado, BorderLayout.NORTH);
         panel.add(panelCentro, BorderLayout.CENTER);
         panel.add(panelAcciones, BorderLayout.SOUTH);
         setContentPane(panel);
         pack();
-        setMinimumSize(new Dimension(940, 560));
+        setMinimumSize(new Dimension(1120, 600));
+    }
+
+    private boolean tieneAccesoAutorizado() {
+        return PoliticaPermisos.tienePermisoOperacion(operador, PoliticaPermisos.ModuloMenu.GESTIONAR_TORNEOS);
     }
 
     private String describirOperador() {
-        if (operador == null) {
-            return "Operador: no identificado. Solo se habilita la consulta; las operaciones de escritura fueron rechazadas.";
+        if (!tieneAccesoAutorizado()) {
+            return "Operador: sin autorización de Organizador o Administrador.";
         }
         return "Operador: " + operador.getNombreUsuario() + " (" + operador.getRol().name() + ")";
     }
 
     private void cargarTorneos() {
+        boolean autorizado = tieneAccesoAutorizado();
+        btnActualizar.setEnabled(autorizado);
+        btnCrear.setEnabled(autorizado);
+        btnEditar.setEnabled(autorizado);
+        btnVerFases.setEnabled(autorizado);
+        btnAgregarFase.setEnabled(autorizado);
+        btnCambiarEstado.setEnabled(autorizado);
+        btnCancelarTorneo.setEnabled(autorizado);
+        if (!autorizado) {
+            torneos.clear();
+            modeloTabla.setRowCount(0);
+            lblInfo.setText("Acceso denegado: requiere sesión de Organizador o Administrador.");
+            lblSeleccion.setText(" ");
+            return;
+        }
         try {
             List<Torneo> cargados = torneoService.listarTodos();
             torneos.clear();
@@ -180,9 +215,8 @@ public class FrmTorneos extends JFrame {
                 lblInfo.setText("Todavía no hay torneos registrados en el sistema.");
                 lblSeleccion.setText(" ");
             } else {
-                lblInfo.setText("Seleccione un torneo de la tabla para operar sobre sus fases y su estado.");
+                lblInfo.setText("Seleccione un torneo de la tabla para editarlo, gestionar sus fases, cambiar su estado o cancelarlo.");
                 lblSeleccion.setText(" ");
-
             }
         } catch (TorneoExcepcion ex) {
             lblInfo.setText("No se pudo cargar el listado de torneos: " + ex.getMessage());
@@ -211,36 +245,48 @@ public class FrmTorneos extends JFrame {
         JComboBox<String> cmbFormato = new JComboBox<>(FORMATOS_TORNEO);
         JTextField txtCupo = new JTextField(6);
         JTextField txtFecha = new JTextField(10);
+        EstilosUI.estilizarCampoTexto(txtNombre, "Ej: Torneo Clausura 2026");
+        EstilosUI.estilizarCombo(cmbFormato);
+        EstilosUI.estilizarCampoTexto(txtCupo, "Ej: 8");
+        EstilosUI.estilizarCampoTexto(txtFecha, "dd/MM/yyyy");
 
         JPanel form = new JPanel(new GridBagLayout());
-        form.setBackground(Color.WHITE);
+        EstilosUI.estilizarPanelModal(form);
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(4, 4, 4, 4);
+        gbc.insets = new Insets(5, 6, 5, 6);
         gbc.anchor = GridBagConstraints.WEST;
 
+        JLabel lblNombre = new JLabel("Nombre del torneo:");
+        EstilosUI.estilizarEtiquetaCampo(lblNombre);
         gbc.gridx = 0;
         gbc.gridy = 0;
-        form.add(new JLabel("Nombre del torneo:"), gbc);
+        form.add(lblNombre, gbc);
         gbc.gridx = 1;
         gbc.gridwidth = 2;
         form.add(txtNombre, gbc);
 
+        JLabel lblFormato = new JLabel("Formato:");
+        EstilosUI.estilizarEtiquetaCampo(lblFormato);
         gbc.gridx = 0;
         gbc.gridy = 1;
         gbc.gridwidth = 1;
-        form.add(new JLabel("Formato:"), gbc);
+        form.add(lblFormato, gbc);
         gbc.gridx = 1;
         form.add(cmbFormato, gbc);
 
+        JLabel lblCupo = new JLabel("Cupo de equipos:");
+        EstilosUI.estilizarEtiquetaCampo(lblCupo);
         gbc.gridx = 0;
         gbc.gridy = 2;
-        form.add(new JLabel("Cupo de equipos:"), gbc);
+        form.add(lblCupo, gbc);
         gbc.gridx = 1;
         form.add(txtCupo, gbc);
 
+        JLabel lblFecha = new JLabel("Fecha de inicio (dd/MM/yyyy):");
+        EstilosUI.estilizarEtiquetaCampo(lblFecha);
         gbc.gridx = 0;
         gbc.gridy = 3;
-        form.add(new JLabel("Fecha de inicio (dd/MM/yyyy):"), gbc);
+        form.add(lblFecha, gbc);
         gbc.gridx = 1;
         gbc.gridwidth = 2;
         form.add(txtFecha, gbc);
@@ -329,19 +375,13 @@ public class FrmTorneos extends JFrame {
     }
 
     private void verFases() {
+        if (!tieneAccesoAutorizado()) {
+            return;
+        }
         Torneo t = obtenerTorneoSeleccionado();
         if (t == null) {
             JOptionPane.showMessageDialog(this, "Seleccione un torneo de la tabla.", "Fases del torneo",
                     JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
-        List<Fase> fases;
-        try {
-            fases = torneoService.listarFasesDeTorneo(t.getIdTorneo());
-        } catch (TorneoExcepcion ex) {
-            JOptionPane.showMessageDialog(this, "ERROR: " + ex.getMessage(), "Fases del torneo",
-                    JOptionPane.ERROR_MESSAGE);
             return;
         }
 
@@ -352,28 +392,312 @@ public class FrmTorneos extends JFrame {
                 return false;
             }
         };
-        if (fases != null) {
-            for (Fase f : fases) {
-                modeloFases.addRow(new Object[]{
-                        f.getIdFase(),
-                        f.getOrden(),
-                        f.getNombre(),
-                        f.isLimpiaAmarillas() ? "Sí" : "No"});
-            }
-        }
-
+        List<Fase> fasesActuales = new ArrayList<>();
         JTable tabla = new JTable(modeloFases);
         tabla.setAutoCreateRowSorter(false);
         JScrollPane scroll = new JScrollPane(tabla);
-        scroll.setPreferredSize(new Dimension(560, 220));
+        scroll.setPreferredSize(new Dimension(640, 240));
+        EstilosUI.estilizarTabla(tabla, scroll);
 
-        String mensaje;
-        if (fases == null || fases.isEmpty()) {
-            mensaje = "El torneo \"" + t.getNombre() + "\" todavía no tiene fases configuradas.";
-        } else {
-            mensaje = "Esquema de fases del torneo \"" + t.getNombre() + "\":";
+        JLabel lblEstadoFases = new JLabel(" ");
+        EstilosUI.estilizarEstadoInfo(lblEstadoFases);
+
+        Runnable recargarFases = () -> {
+            fasesActuales.clear();
+            modeloFases.setRowCount(0);
+            try {
+                List<Fase> cargadas = torneoService.listarFasesDeTorneo(t.getIdTorneo());
+                if (cargadas != null) {
+                    fasesActuales.addAll(cargadas);
+                    for (Fase f : cargadas) {
+                        modeloFases.addRow(new Object[]{
+                                f.getIdFase(),
+                                f.getOrden(),
+                                f.getNombre(),
+                                f.isLimpiaAmarillas() ? "Sí" : "No"});
+                    }
+                }
+                lblEstadoFases.setText(fasesActuales.isEmpty()
+                        ? "El torneo todavía no tiene fases configuradas."
+                        : fasesActuales.size() + " fase(s) configurada(s).");
+            } catch (TorneoExcepcion ex) {
+                lblEstadoFases.setText("Error al consultar fases: " + ex.getMessage());
+            }
+        };
+        recargarFases.run();
+
+        JDialog dialog = new JDialog(this, "Fases de \"" + t.getNombre() + "\"", true);
+        JPanel root = new JPanel(new BorderLayout(10, 10));
+        EstilosUI.estilizarVentana(root);
+        root.add(lblEstadoFases, BorderLayout.NORTH);
+        root.add(scroll, BorderLayout.CENTER);
+
+        JPanel botones = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 4));
+        botones.setBackground(EstilosUI.BG_CANVAS);
+
+        JButton btnNuevaFase = new JButton("Agregar fase");
+        EstilosUI.estilizarBotonPrimario(btnNuevaFase);
+        btnNuevaFase.addActionListener(e -> {
+            agregarFase();
+            recargarFases.run();
+        });
+
+        JButton btnEditarFase = new JButton("Editar fase");
+        EstilosUI.estilizarBotonSecundario(btnEditarFase);
+        btnEditarFase.addActionListener(e -> {
+            int row = tabla.getSelectedRow();
+            if (row < 0 || row >= fasesActuales.size()) {
+                JOptionPane.showMessageDialog(dialog, "Seleccione una fase de la tabla.", "Editar fase",
+                        JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            editarFase(dialog, t, fasesActuales.get(row));
+            recargarFases.run();
+        });
+
+        JButton btnQuitarFase = new JButton("Quitar fase sin partidos");
+        EstilosUI.estilizarBotonPeligro(btnQuitarFase);
+        btnQuitarFase.addActionListener(e -> {
+            int row = tabla.getSelectedRow();
+            if (row < 0 || row >= fasesActuales.size()) {
+                JOptionPane.showMessageDialog(dialog, "Seleccione la fase a quitar.", "Quitar fase",
+                        JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            Fase f = fasesActuales.get(row);
+            int conf = JOptionPane.showConfirmDialog(dialog,
+                    "¿Confirma quitar la fase \"" + f.getNombre() + "\" (orden " + f.getOrden() + ")?\nSolo es posible si el torneo está en CONFIGURACION y la fase no tiene partidos.",
+                    "Confirmar quita de fase", JOptionPane.YES_NO_OPTION);
+            if (conf != JOptionPane.YES_OPTION) {
+                return;
+            }
+            try {
+                torneoService.eliminarFase(f.getIdFase(), operador);
+                JOptionPane.showMessageDialog(dialog, "ÉXITO: Fase quitada del esquema.", "Fases del torneo",
+                        JOptionPane.INFORMATION_MESSAGE);
+                recargarFases.run();
+            } catch (TorneoExcepcion ex) {
+                JOptionPane.showMessageDialog(dialog, "ERROR: " + ex.getMessage(), "No se pudo quitar la fase",
+                        JOptionPane.ERROR_MESSAGE);
+            }
+        });
+
+        JButton btnCerrar = new JButton("Cerrar");
+        EstilosUI.estilizarBotonNeutro(btnCerrar);
+        btnCerrar.addActionListener(e -> dialog.dispose());
+
+        botones.add(btnNuevaFase);
+        botones.add(btnEditarFase);
+        botones.add(btnQuitarFase);
+        botones.add(btnCerrar);
+        root.add(botones, BorderLayout.SOUTH);
+
+        dialog.setContentPane(root);
+        dialog.pack();
+        dialog.setMinimumSize(new Dimension(700, 380));
+        dialog.setLocationRelativeTo(this);
+        dialog.setVisible(true);
+    }
+
+    private void editarFase(JDialog parent, Torneo t, Fase f) {
+        JTextField txtNombre = new JTextField(f.getNombre(), 20);
+        JTextField txtOrden = new JTextField(String.valueOf(f.getOrden()), 4);
+        JCheckBox chkLimpia = new JCheckBox("La fase reinicia la acumulación de amarillas", f.isLimpiaAmarillas());
+        EstilosUI.estilizarCampoTexto(txtNombre, "Nombre de la fase");
+        EstilosUI.estilizarCampoTexto(txtOrden, null);
+        EstilosUI.estilizarCheckBox(chkLimpia);
+
+        JPanel form = new JPanel(new GridBagLayout());
+        EstilosUI.estilizarPanelModal(form);
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5, 6, 5, 6);
+        gbc.anchor = GridBagConstraints.WEST;
+
+        JLabel lblNombreFase = new JLabel("Nombre de la fase:");
+        EstilosUI.estilizarEtiquetaCampo(lblNombreFase);
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        form.add(lblNombreFase, gbc);
+        gbc.gridx = 1;
+        form.add(txtNombre, gbc);
+
+        JLabel lblOrden = new JLabel("Orden de ejecución:");
+        EstilosUI.estilizarEtiquetaCampo(lblOrden);
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        form.add(lblOrden, gbc);
+        gbc.gridx = 1;
+        form.add(txtOrden, gbc);
+
+        gbc.gridx = 0;
+        gbc.gridy = 2;
+        gbc.gridwidth = 2;
+        form.add(chkLimpia, gbc);
+
+        int opcion = JOptionPane.showConfirmDialog(parent, form,
+                "Editar fase #" + f.getIdFase() + " (" + t.getNombre() + ")",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (opcion != JOptionPane.OK_OPTION) {
+            return;
         }
-        JOptionPane.showMessageDialog(this, scroll, mensaje, JOptionPane.INFORMATION_MESSAGE);
+        String nombre = txtNombre.getText() == null ? "" : txtNombre.getText().trim();
+        if (nombre.isEmpty()) {
+            JOptionPane.showMessageDialog(parent, "El nombre de la fase es obligatorio.", "Editar fase",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        int orden;
+        try {
+            orden = Integer.parseInt(txtOrden.getText() == null ? "" : txtOrden.getText().trim());
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(parent, "El orden debe ser un número entero mayor a 0.", "Editar fase",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        try {
+            torneoService.actualizarFase(f.getIdFase(), nombre, orden, chkLimpia.isSelected(), operador);
+            JOptionPane.showMessageDialog(parent, "ÉXITO: Fase actualizada correctamente.", "Editar fase",
+                    JOptionPane.INFORMATION_MESSAGE);
+        } catch (TorneoExcepcion ex) {
+            JOptionPane.showMessageDialog(parent, "ERROR: " + ex.getMessage(), "Editar fase",
+                    JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void editarTorneo() {
+        if (!tieneAccesoAutorizado()) {
+            return;
+        }
+        Torneo t = obtenerTorneoSeleccionado();
+        if (t == null) {
+            JOptionPane.showMessageDialog(this, "Seleccione un torneo de la tabla.", "Editar torneo",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        JTextField txtNombre = new JTextField(t.getNombre(), 24);
+        JComboBox<String> cmbFormato = new JComboBox<>(FORMATOS_TORNEO);
+        if (t.getFormato() != null) {
+            cmbFormato.setSelectedItem(t.getFormato().name());
+        }
+        JTextField txtCupo = new JTextField(String.valueOf(t.getCupoEquipos()), 6);
+        JTextField txtFecha = new JTextField(t.getFechaInicio() == null ? "" : FORMATO_FECHA.format(t.getFechaInicio()), 10);
+        EstilosUI.estilizarCampoTexto(txtNombre, "Nombre único del torneo");
+        EstilosUI.estilizarCombo(cmbFormato);
+        EstilosUI.estilizarCampoTexto(txtCupo, "Cupo par");
+        EstilosUI.estilizarCampoTexto(txtFecha, "dd/MM/yyyy");
+
+        JPanel form = new JPanel(new GridBagLayout());
+        EstilosUI.estilizarPanelModal(form);
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5, 6, 5, 6);
+        gbc.anchor = GridBagConstraints.WEST;
+
+        JLabel lblNombre = new JLabel("Nombre del torneo:");
+        EstilosUI.estilizarEtiquetaCampo(lblNombre);
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        form.add(lblNombre, gbc);
+        gbc.gridx = 1;
+        gbc.gridwidth = 2;
+        form.add(txtNombre, gbc);
+
+        JLabel lblFormato = new JLabel("Formato:");
+        EstilosUI.estilizarEtiquetaCampo(lblFormato);
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        gbc.gridwidth = 1;
+        form.add(lblFormato, gbc);
+        gbc.gridx = 1;
+        form.add(cmbFormato, gbc);
+
+        JLabel lblCupo = new JLabel("Cupo de equipos:");
+        EstilosUI.estilizarEtiquetaCampo(lblCupo);
+        gbc.gridx = 0;
+        gbc.gridy = 2;
+        form.add(lblCupo, gbc);
+        gbc.gridx = 1;
+        form.add(txtCupo, gbc);
+
+        JLabel lblFecha = new JLabel("Fecha de inicio (dd/MM/yyyy):");
+        EstilosUI.estilizarEtiquetaCampo(lblFecha);
+        gbc.gridx = 0;
+        gbc.gridy = 3;
+        form.add(lblFecha, gbc);
+        gbc.gridx = 1;
+        gbc.gridwidth = 2;
+        form.add(txtFecha, gbc);
+
+        int opcion = JOptionPane.showConfirmDialog(this, form, "Editar torneo #" + t.getIdTorneo(),
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (opcion != JOptionPane.OK_OPTION) {
+            return;
+        }
+        String nombre = txtNombre.getText() == null ? "" : txtNombre.getText().trim();
+        String formato = (String) cmbFormato.getSelectedItem();
+        if (nombre.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "El nombre del torneo es obligatorio.", "Editar torneo",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        int cupo;
+        try {
+            cupo = Integer.parseInt(txtCupo.getText() == null ? "" : txtCupo.getText().trim());
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(this, "El cupo debe ser un número entero par mayor o igual a 2.",
+                    "Editar torneo", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        Date fechaInicio;
+        try {
+            fechaInicio = parsearFecha(txtFecha.getText());
+        } catch (ParseException ex) {
+            JOptionPane.showMessageDialog(this, "Fecha inválida. Use el formato dd/MM/yyyy.",
+                    "Editar torneo", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        int conf = JOptionPane.showConfirmDialog(this,
+                "¿Confirma guardar los cambios del torneo \"" + nombre + "\"?",
+                "Confirmar edición", JOptionPane.YES_NO_OPTION);
+        if (conf != JOptionPane.YES_OPTION) {
+            return;
+        }
+        try {
+            torneoService.actualizarTorneo(t.getIdTorneo(), nombre, formato, cupo, fechaInicio, operador);
+            JOptionPane.showMessageDialog(this, "ÉXITO: Torneo actualizado correctamente.", "Editar torneo",
+                    JOptionPane.INFORMATION_MESSAGE);
+            cargarTorneos();
+        } catch (TorneoExcepcion ex) {
+            JOptionPane.showMessageDialog(this, "ERROR: " + ex.getMessage(), "Editar torneo",
+                    JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void cancelarTorneo() {
+        if (!tieneAccesoAutorizado()) {
+            return;
+        }
+        Torneo t = obtenerTorneoSeleccionado();
+        if (t == null) {
+            JOptionPane.showMessageDialog(this, "Seleccione un torneo de la tabla.", "Cancelar torneo",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        int conf = JOptionPane.showConfirmDialog(this,
+                "¿Confirma la baja lógica (CANCELADO) del torneo \"" + t.getNombre()
+                        + "\"?\nConservará su historial y partidos ya registrados, y no podrá reactivarse.",
+                "Confirmar cancelación", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+        if (conf != JOptionPane.YES_OPTION) {
+            return;
+        }
+        try {
+            torneoService.cancelarTorneo(t.getIdTorneo(), operador);
+            JOptionPane.showMessageDialog(this, "ÉXITO: El torneo \"" + t.getNombre() + "\" pasó a estado CANCELADO.",
+                    "Cancelar torneo", JOptionPane.INFORMATION_MESSAGE);
+            cargarTorneos();
+        } catch (TorneoExcepcion ex) {
+            JOptionPane.showMessageDialog(this, "ERROR: " + ex.getMessage(), "Cancelar torneo",
+                    JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private void agregarFase() {
@@ -404,31 +728,43 @@ public class FrmTorneos extends JFrame {
         JTextField txtNombre = new JTextField(20);
         JTextField txtOrden = new JTextField(String.valueOf(ordenSugerido), 4);
         JCheckBox chkLimpia = new JCheckBox("La fase reinicia la acumulación de amarillas");
+        EstilosUI.estilizarCampoTexto(txtNombre, "Ej: Semifinal");
+        EstilosUI.estilizarCampoTexto(txtOrden, null);
+        EstilosUI.estilizarCheckBox(chkLimpia);
 
         JPanel form = new JPanel(new GridBagLayout());
-        form.setBackground(Color.WHITE);
+        EstilosUI.estilizarPanelModal(form);
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(4, 4, 4, 4);
+        gbc.insets = new Insets(5, 6, 5, 6);
         gbc.anchor = GridBagConstraints.WEST;
 
+        JLabel lblTorneo = new JLabel("Torneo:");
+        EstilosUI.estilizarEtiquetaCampo(lblTorneo);
         gbc.gridx = 0;
         gbc.gridy = 0;
-        form.add(new JLabel("Torneo:"), gbc);
+        form.add(lblTorneo, gbc);
+        JLabel lblTorneoVal = new JLabel(t.getNombre() + " (ID " + t.getIdTorneo() + ")");
+        EstilosUI.estilizarTextoPrimario(lblTorneoVal);
         gbc.gridx = 1;
         gbc.gridwidth = 2;
-        form.add(new JLabel(t.getNombre() + " (ID " + t.getIdTorneo() + ")"), gbc);
+        form.add(lblTorneoVal, gbc);
 
+        JLabel lblNombreFase = new JLabel("Nombre de la fase:");
+        EstilosUI.estilizarEtiquetaCampo(lblNombreFase);
         gbc.gridx = 0;
         gbc.gridy = 1;
         gbc.gridwidth = 1;
-        form.add(new JLabel("Nombre de la fase:"), gbc);
+        form.add(lblNombreFase, gbc);
         gbc.gridx = 1;
         gbc.gridwidth = 2;
         form.add(txtNombre, gbc);
 
+        JLabel lblOrden = new JLabel("Orden de ejecución:");
+        EstilosUI.estilizarEtiquetaCampo(lblOrden);
         gbc.gridx = 0;
         gbc.gridy = 2;
-        form.add(new JLabel("Orden de ejecución:"), gbc);
+        gbc.gridwidth = 1;
+        form.add(lblOrden, gbc);
         gbc.gridx = 1;
         form.add(txtOrden, gbc);
 
@@ -514,24 +850,31 @@ public class FrmTorneos extends JFrame {
 
         JComboBox<String> cmbEstado = new JComboBox<>(ESTADOS_TORNEO);
         cmbEstado.setSelectedItem(t.getEstado());
+        EstilosUI.estilizarCombo(cmbEstado);
 
         JPanel form = new JPanel(new GridBagLayout());
-        form.setBackground(Color.WHITE);
+        EstilosUI.estilizarPanelModal(form);
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(4, 4, 4, 4);
+        gbc.insets = new Insets(5, 6, 5, 6);
         gbc.anchor = GridBagConstraints.WEST;
 
+        JLabel lblTorneo = new JLabel("Torneo:");
+        EstilosUI.estilizarEtiquetaCampo(lblTorneo);
         gbc.gridx = 0;
         gbc.gridy = 0;
-        form.add(new JLabel("Torneo:"), gbc);
+        form.add(lblTorneo, gbc);
+        JLabel lblTorneoVal = new JLabel(t.getNombre() + " (estado actual: " + t.getEstado() + ")");
+        EstilosUI.estilizarTextoPrimario(lblTorneoVal);
         gbc.gridx = 1;
         gbc.gridwidth = 2;
-        form.add(new JLabel(t.getNombre() + " (estado actual: " + t.getEstado() + ")"), gbc);
+        form.add(lblTorneoVal, gbc);
 
+        JLabel lblNuevoEstado = new JLabel("Nuevo estado:");
+        EstilosUI.estilizarEtiquetaCampo(lblNuevoEstado);
         gbc.gridx = 0;
         gbc.gridy = 1;
         gbc.gridwidth = 1;
-        form.add(new JLabel("Nuevo estado:"), gbc);
+        form.add(lblNuevoEstado, gbc);
         gbc.gridx = 1;
         form.add(cmbEstado, gbc);
 

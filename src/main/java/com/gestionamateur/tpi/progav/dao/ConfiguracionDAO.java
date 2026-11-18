@@ -11,6 +11,25 @@ import java.util.Map;
 
 public class ConfiguracionDAO {
 
+    /**
+     * DEF-011: parametros cuyo dominio es un entero no negativo (plazos, umbrales y montos).
+     * El resto de los parametros mantienen su contrato original.
+     */
+    private static final java.util.Set<String> REQUIERE_VALOR_NO_NEGATIVO = java.util.Collections.unmodifiableSet(
+            new java.util.LinkedHashSet<>(java.util.Arrays.asList(
+                    "EDAD_MINIMA_GENERAL",
+                    "AMARILLAS_SUSPENSION",
+                    "HORAS_LIMITE_RECLAMO",
+                    "DIAS_LIMITE_APELACION",
+                    "PARTIDOS_SUSPENSION_MAXIMA",
+                    "DURACION_PARTIDO_MINUTOS",
+                    "CUPO_EQUIPOS_MINIMO")));
+
+    /** Expone el conjunto de claves con dominio no negativo (usado por las pruebas). */
+    public static java.util.Set<String> clavesConValorNoNegativo() {
+        return REQUIERE_VALOR_NO_NEGATIVO;
+    }
+
     public int obtenerValorInt(String clave, int valorDefecto) throws SQLException {
         try (Connection conn = ConexionBD.obtenerConexion()) {
             return obtenerValorInt(conn, clave, valorDefecto);
@@ -36,7 +55,18 @@ public class ConfiguracionDAO {
         }
     }
 
+    /**
+     * Actualiza el valor de un parametro de configuracion.
+     *
+     * <p>DEF-011: la validacion no puede depender exclusivamente de la interfaz. Los parametros
+     * cuyo dominio es un entero no negativo se rechazan en la capa de persistencia, de modo que
+     * ningun llamante pueda dejar un valor invalido en la base.
+     */
     public void actualizarValorInt(Connection conn, String clave, int valor) throws SQLException {
+        if (valor < 0 && REQUIERE_VALOR_NO_NEGATIVO.contains(clave)) {
+            throw new SQLException("El parametro de configuracion '" + clave + "' no admite valores negativos (valor recibido: "
+                    + valor + ").");
+        }
         String sql = "INSERT INTO configuraciones (clave, valor, fecha_actualizacion) "
                    + "VALUES (?, ?, CURRENT_TIMESTAMP) "
                    + "ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor, fecha_actualizacion = CURRENT_TIMESTAMP";

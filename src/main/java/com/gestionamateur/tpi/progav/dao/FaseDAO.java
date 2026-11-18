@@ -91,6 +91,82 @@ public class FaseDAO {
         return 1;
     }
 
+    public boolean existeNombreEnTorneoExcluyendoId(Connection conn, Long idTorneo, String nombre, Long idFaseExcluida) throws SQLException {
+        String sql = "SELECT COUNT(*) FROM fases WHERE id_torneo = ? AND lower(nombre) = lower(?)"
+                   + (idFaseExcluida != null ? " AND id_fase <> ?" : "");
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, idTorneo);
+            ps.setString(2, nombre);
+            if (idFaseExcluida != null) {
+                ps.setLong(3, idFaseExcluida);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() && rs.getInt(1) > 0;
+            }
+        }
+    }
+
+    public boolean existeOrdenEnTorneoExcluyendoId(Connection conn, Long idTorneo, int orden, Long idFaseExcluida) throws SQLException {
+        String sql = "SELECT COUNT(*) FROM fases WHERE id_torneo = ? AND orden = ?"
+                   + (idFaseExcluida != null ? " AND id_fase <> ?" : "");
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, idTorneo);
+            ps.setInt(2, orden);
+            if (idFaseExcluida != null) {
+                ps.setLong(3, idFaseExcluida);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() && rs.getInt(1) > 0;
+            }
+        }
+    }
+
+    public Long obtenerIdTorneoDeFase(Connection conn, Long idFase) throws SQLException {
+        String sql = "SELECT id_torneo FROM fases WHERE id_fase = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, idFase);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getLong(1) : null;
+            }
+        }
+    }
+
+    public int contarPartidosDeFase(Connection conn, Long idFase) throws SQLException {
+        String sql = "SELECT COUNT(*) FROM partidos WHERE id_fase = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, idFase);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        }
+    }
+
+    public void actualizar(Connection conn, Fase fase) throws SQLException {
+        String sql = "UPDATE fases SET nombre = ?, orden = ?, limpia_amarillas = ? WHERE id_fase = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, fase.getNombre());
+            ps.setInt(2, fase.getOrden());
+            ps.setBoolean(3, fase.isLimpiaAmarillas());
+            ps.setLong(4, fase.getIdFase());
+            int filas = ps.executeUpdate();
+            if (filas != 1) {
+                throw new SQLException("No se encontró la fase ID " + fase.getIdFase() + " para actualizar.");
+            }
+        }
+    }
+
+    public void eliminarSiSinPartidos(Connection conn, Long idFase) throws SQLException {
+        String sql = "DELETE FROM fases WHERE id_fase = ? AND NOT EXISTS (SELECT 1 FROM partidos WHERE id_fase = ?)";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, idFase);
+            ps.setLong(2, idFase);
+            int filas = ps.executeUpdate();
+            if (filas != 1) {
+                throw new SQLException("No se pudo eliminar la fase ID " + idFase + " porque no existe o tiene partidos asociados.");
+            }
+        }
+    }
+
     private Fase mapearFase(ResultSet rs) throws SQLException {
         try {
             Long id = rs.getLong("id_fase");

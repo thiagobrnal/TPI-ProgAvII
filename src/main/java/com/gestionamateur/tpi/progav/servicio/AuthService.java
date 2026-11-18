@@ -128,10 +128,16 @@ public class AuthService {
     }
 
     public void cerrarSesion() {
-        if (this.usuarioAutenticado != null) {
-            SistemaLogs.info(AuthService.class, "Cierre de sesión: " + usuarioAutenticado.getNombreUsuario());
-            this.usuarioAutenticado = null;
+        cerrarSesion(this.usuarioAutenticado);
+    }
+
+    /** Cierra y audita la sesión activa del usuario, limpiando la referencia en AuthService. */
+    public void cerrarSesion(Usuario usuario) {
+        Usuario objetivo = usuario != null ? usuario : this.usuarioAutenticado;
+        if (objetivo != null) {
+            SistemaLogs.info(AuthService.class, "Cierre de sesión: " + objetivo.getNombreUsuario());
         }
+        this.usuarioAutenticado = null;
     }
 
     public Usuario getUsuarioAutenticado() {

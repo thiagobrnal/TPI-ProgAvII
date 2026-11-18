@@ -106,6 +106,33 @@ public class CanchaDAO {
         }
     }
 
+    /** CU-16: verifica si existe otra sede/cancha con el mismo nombre. */
+    public boolean existePorNombreExcluyendoId(Connection conn, String nombre, Long idCanchaExcluida) throws SQLException {
+        String sql = "SELECT COUNT(*) FROM canchas WHERE lower(nombre) = lower(?) AND id_cancha <> ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, nombre);
+            ps.setLong(2, idCanchaExcluida);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() && rs.getInt(1) > 0;
+            }
+        }
+    }
+
+    /** CU-16: actualiza los atributos editables de una cancha existente. */
+    public void actualizar(Connection conn, Cancha cancha) throws SQLException {
+        String sql = "UPDATE canchas SET nombre = ?, direccion = ?, tipo_superficie = ? WHERE id_cancha = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, cancha.getNombre());
+            ps.setString(2, cancha.getDireccion());
+            ps.setString(3, cancha.getTipoSuperficie());
+            ps.setLong(4, cancha.getIdCancha());
+            int filas = ps.executeUpdate();
+            if (filas != 1) {
+                throw new SQLException("No se encontró la cancha ID " + cancha.getIdCancha() + " para actualizar.");
+            }
+        }
+    }
+
     /** CU-16 (alternativa A1): habilita o inhabilita una sede. */
     public void actualizarActiva(Connection conn, Long idCancha, boolean activa) throws SQLException {
         String sql = "UPDATE canchas SET activa = ? WHERE id_cancha = ?";

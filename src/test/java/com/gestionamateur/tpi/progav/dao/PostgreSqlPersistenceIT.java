@@ -41,6 +41,9 @@ public class PostgreSqlPersistenceIT {
     static void setUp() throws SQLException {
         // Verificar que la base de datos de test esté activa y respondiendo
         assertTrue(ConexionBD.comprobarConexion(), "El servidor PostgreSQL no responde en 127.0.0.1:55432");
+        // DEF-004: fail-closed. La base efectiva de la suite debe ser la base de pruebas declarada.
+        // y nunca una base reservada (demostracion, inf06_test o temporal historica de auditoria).
+        ConexionBD.validarDestinoDePruebas();
 
         rolDAO = new RolDAO();
         usuarioDAO = new UsuarioDAO();

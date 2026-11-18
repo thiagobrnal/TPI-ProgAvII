@@ -88,6 +88,27 @@ public class ArbitroDAO {
         return lista;
     }
 
+    public void insertarOActualizarPerfil(Connection conn, Long idUsuario, String categoriaArbitral, String telefono) throws SQLException {
+        String sql = "INSERT INTO arbitros (id_usuario, categoria_arbitral, telefono) VALUES (?, ?, ?) "
+                   + "ON CONFLICT (id_usuario) DO UPDATE SET categoria_arbitral = EXCLUDED.categoria_arbitral, telefono = EXCLUDED.telefono";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, idUsuario);
+            ps.setString(2, categoriaArbitral);
+            ps.setString(3, telefono);
+            ps.executeUpdate();
+        }
+    }
+
+    public int contarPartidosAsignados(Connection conn, Long idArbitro) throws SQLException {
+        String sql = "SELECT COUNT(*) FROM partidos WHERE id_arbitro = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, idArbitro);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        }
+    }
+
     private Arbitro mapearArbitro(ResultSet rs) throws SQLException {
         try {
             Long id = rs.getLong("id_usuario");

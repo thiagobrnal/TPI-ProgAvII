@@ -19,6 +19,7 @@ import com.gestionamateur.tpi.progav.modelo.SistemaLogs;
 import com.gestionamateur.tpi.progav.modelo.TiposDatos;
 import com.gestionamateur.tpi.progav.modelo.TorneoExcepcion;
 import com.gestionamateur.tpi.progav.modelo.Usuario;
+import com.gestionamateur.tpi.progav.seguridad.PoliticaPermisos;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Date;
@@ -72,17 +73,20 @@ public class ReclamoService {
     }
 
     public Reclamo presentarReclamoPartido(Long idPartido, Long idCapitan, String motivo, Usuario operador) throws TorneoExcepcion {
-        if (operador == null) {
+        if (!PoliticaPermisos.esOperadorPersistidoValido(operador)) {
             throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para presentar reclamos.");
         }
         TiposDatos.Rol rol = operador.getRol();
         if (rol != TiposDatos.Rol.CAPITAN && rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR) {
             throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para presentar reclamos.");
         }
-        if (rol == TiposDatos.Rol.CAPITAN && operador.getId() != null && !operador.getId().equals(idCapitan)) {
+        if (rol == TiposDatos.Rol.CAPITAN && !operador.getId().equals(idCapitan)) {
             throw new TorneoExcepcion("Acceso denegado: El operador autenticado no coincide con el capitán que suscribe el reclamo.");
         }
 
+        if (idPartido == null || idPartido <= 0 || idCapitan == null || idCapitan <= 0) {
+            throw new TorneoExcepcion("Debe especificar identificadores válidos de partido y capitán.");
+        }
         if (motivo == null || motivo.trim().length() < 15) {
             throw new TorneoExcepcion("El motivo del reclamo debe ser detallado (al menos 15 caracteres).");
         }
@@ -136,17 +140,20 @@ public class ReclamoService {
     }
 
     public Reclamo apelarSancion(Long idSancion, Long idCapitan, String motivo, Usuario operador) throws TorneoExcepcion {
-        if (operador == null) {
+        if (!PoliticaPermisos.esOperadorPersistidoValido(operador)) {
             throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para apelar sanciones.");
         }
         TiposDatos.Rol rol = operador.getRol();
         if (rol != TiposDatos.Rol.CAPITAN && rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR) {
             throw new TorneoExcepcion("Acceso denegado: El rol " + rol + " no tiene permisos para apelar sanciones.");
         }
-        if (rol == TiposDatos.Rol.CAPITAN && operador.getId() != null && !operador.getId().equals(idCapitan)) {
+        if (rol == TiposDatos.Rol.CAPITAN && !operador.getId().equals(idCapitan)) {
             throw new TorneoExcepcion("Acceso denegado: El operador autenticado no coincide con el capitán que suscribe la apelación.");
         }
 
+        if (idSancion == null || idSancion <= 0 || idCapitan == null || idCapitan <= 0) {
+            throw new TorneoExcepcion("Debe especificar identificadores válidos de sanción y capitán.");
+        }
         if (motivo == null || motivo.trim().length() < 15) {
             throw new TorneoExcepcion("La fundamentación de la apelación debe contener al menos 15 caracteres.");
         }
@@ -205,13 +212,22 @@ public class ReclamoService {
         resolverExpediente(idReclamo, veredicto, justificacion, null);
     }
 
-    public void resolverExpediente(Long idReclamo, String veredicto, String justificacion, Usuario operador) throws TorneoExcepcion {
-        if (operador == null) {
-            throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para resolver expedientes.");
+    private void validarOperadorResolucion(Usuario operador, String accion) throws TorneoExcepcion {
+        if (!PoliticaPermisos.esSesionAutenticada(operador)) {
+            throw new TorneoExcepcion("Acceso denegado: Se requiere un operador autenticado para " + accion + ".");
         }
-        TiposDatos.Rol rol = operador.getRol();
-        if (rol != TiposDatos.Rol.ADMINISTRADOR && rol != TiposDatos.Rol.ORGANIZADOR) {
-            throw new TorneoExcepcion("Acceso denegado: Sólo usuarios con rol ADMINISTRADOR u ORGANIZADOR (Tribunal) pueden resolver expedientes.");
+        if (!PoliticaPermisos.tienePermiso(operador, PoliticaPermisos.ModuloMenu.RESOLVER_RECLAMOS)) {
+            throw new TorneoExcepcion("Acceso denegado: El rol " + operador.getRol() + " no tiene permisos para " + accion + ".");
+        }
+        if (!PoliticaPermisos.esOperadorPersistidoValido(operador)) {
+            throw new TorneoExcepcion("Acceso denegado: Se requiere un operador autenticado con identificador válido para " + accion + ".");
+        }
+    }
+
+    public void resolverExpediente(Long idReclamo, String veredicto, String justificacion, Usuario operador) throws TorneoExcepcion {
+        validarOperadorResolucion(operador, "resolver expedientes");
+        if (idReclamo == null || idReclamo <= 0) {
+            throw new TorneoExcepcion("Debe especificar un identificador de reclamo válido.");
         }
         if (veredicto == null || veredicto.trim().isEmpty()) {
             throw new TorneoExcepcion("El veredicto formal es obligatorio.");
@@ -266,6 +282,13 @@ public class ReclamoService {
     }
 
     public List<Reclamo> listarReclamosPendientes() throws TorneoExcepcion {
+        throw new TorneoExcepcion("Acceso denegado: se requiere un operador autenticado para consultar reclamos pendientes.");
+    }
+
+    public List<Reclamo> listarReclamosPendientes(Usuario operador) throws TorneoExcepcion {
+        if (!PoliticaPermisos.tienePermisoOperacion(operador, PoliticaPermisos.ModuloMenu.RESOLVER_RECLAMOS)) {
+            throw new TorneoExcepcion("Acceso denegado: solo ADMINISTRADOR u ORGANIZADOR autenticados pueden consultar reclamos pendientes.");
+        }
         try (Connection conn = ConexionBD.obtenerConexion()) {
             return reclamoDAO.buscarPendientes(conn);
         } catch (SQLException e) {
@@ -274,6 +297,14 @@ public class ReclamoService {
     }
 
     public Reclamo buscarPorId(Long idReclamo) throws TorneoExcepcion {
+        return buscarPorId(idReclamo, null);
+    }
+
+    public Reclamo buscarPorId(Long idReclamo, Usuario operador) throws TorneoExcepcion {
+        validarOperadorResolucion(operador, "consultar el detalle de un reclamo");
+        if (idReclamo == null || idReclamo <= 0) {
+            throw new TorneoExcepcion("Debe especificar un identificador de reclamo válido.");
+        }
         try (Connection conn = ConexionBD.obtenerConexion()) {
             return reclamoDAO.buscarPorId(conn, idReclamo);
         } catch (SQLException e) {

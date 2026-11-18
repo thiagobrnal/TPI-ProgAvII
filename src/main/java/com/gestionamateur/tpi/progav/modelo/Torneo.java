@@ -122,8 +122,9 @@ public class Torneo {
             throw new TorneoExcepcion("El estado del torneo no puede ser nulo.");
         }
         String norm = estado.trim().toUpperCase();
-        if (!norm.equals("CONFIGURACION") && !norm.equals("EN_CURSO") && !norm.equals("FINALIZADO")) {
-            throw new TorneoExcepcion("Estado de torneo inválido: debe ser CONFIGURACION, EN_CURSO o FINALIZADO.");
+        if (!norm.equals("CONFIGURACION") && !norm.equals("EN_CURSO")
+                && !norm.equals("FINALIZADO") && !norm.equals("CANCELADO")) {
+            throw new TorneoExcepcion("Estado de torneo inválido: debe ser CONFIGURACION, EN_CURSO, FINALIZADO o CANCELADO.");
         }
         this.estado = norm;
     }

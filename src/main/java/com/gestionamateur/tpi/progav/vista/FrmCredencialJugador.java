@@ -1,14 +1,17 @@
 package com.gestionamateur.tpi.progav.vista;
 
+import com.gestionamateur.tpi.progav.controlador.GestorJugadores;
 import com.gestionamateur.tpi.progav.dao.EquipoDAO;
-import com.gestionamateur.tpi.progav.dao.JugadorDAO;
 import com.gestionamateur.tpi.progav.modelo.Equipo;
 import com.gestionamateur.tpi.progav.modelo.Jugador;
+import com.gestionamateur.tpi.progav.modelo.TiposDatos;
+import com.gestionamateur.tpi.progav.modelo.TorneoExcepcion;
+import com.gestionamateur.tpi.progav.modelo.Usuario;
+import com.gestionamateur.tpi.progav.seguridad.PoliticaPermisos;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
-import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -26,6 +29,7 @@ import javax.swing.BorderFactory;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
+import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -38,12 +42,21 @@ import javax.swing.JPanel;
  */
 public class FrmCredencialJugador extends JFrame {
 
-    private final JugadorDAO jugadorDAO = new JugadorDAO();
+    private final Usuario operador;
+    private final GestorJugadores gestorJugadores = new GestorJugadores();
     private final List<Jugador> jugadores = new ArrayList<>();
     private final JComboBox<String> cmbJugador = new JComboBox<>();
+    private final JLabel lblEstadoAcceso = new JLabel(" ");
+    private final JButton btnRefrescar = new JButton("Actualizar");
+    private final JButton btnImprimir = new JButton("Imprimir credencial");
     private final PanelCredencial panelCredencial = new PanelCredencial();
 
     public FrmCredencialJugador() {
+        this(null);
+    }
+
+    public FrmCredencialJugador(Usuario operador) {
+        this.operador = operador;
         setTitle("Credencial de Jugador (CU-02.2)");
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         initComponents();
@@ -51,72 +64,136 @@ public class FrmCredencialJugador extends JFrame {
         setLocationRelativeTo(null);
     }
 
+    private boolean tieneAccesoAutorizado() {
+        return PoliticaPermisos.tienePermisoOperacion(operador, PoliticaPermisos.ModuloMenu.IMPRIMIR_CREDENCIALES);
+    }
+
     private void initComponents() {
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
-        panel.setBackground(Color.WHITE);
+        JPanel panel = new JPanel(new BorderLayout(12, 12));
+        EstilosUI.estilizarVentana(panel);
+
+        JPanel panelEncabezado = EstilosUI.crearEncabezado(
+                "Credencial de jugador",
+                "Emisión e impresión de credencial oficial con código de barras Code 39 (CU-02.2)");
 
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(4, 4, 4, 4);
+        gbc.insets = new Insets(5, 6, 5, 10);
         gbc.anchor = GridBagConstraints.WEST;
 
         JPanel panelSup = new JPanel(new GridBagLayout());
-        panelSup.setBackground(Color.WHITE);
-        JLabel titulo = new JLabel("Credencial de jugador");
-        titulo.setFont(new Font("Segoe UI", Font.BOLD, 20));
-        titulo.setForeground(new Color(0x12, 0x38, 0x5C));
+        EstilosUI.estilizarTarjeta(panelSup);
+
+        JLabel lblJugador = new JLabel("Jugador habilitado:");
+        EstilosUI.estilizarEtiquetaCampo(lblJugador);
         gbc.gridx = 0;
         gbc.gridy = 0;
-        gbc.gridwidth = 3;
-        panelSup.add(titulo, gbc);
+        panelSup.add(lblJugador, gbc);
 
-        gbc.gridwidth = 1;
-        gbc.gridy = 1;
-        panelSup.add(new JLabel("Jugador habilitado:"), gbc);
+        EstilosUI.estilizarCombo(cmbJugador);
+        cmbJugador.setPreferredSize(new Dimension(290, 30));
+        cmbJugador.addActionListener(e -> panelCredencial.setJugador(jugadorSeleccionado()));
         gbc.gridx = 1;
-        cmbJugador.setPreferredSize(new Dimension(280, 26));
+        gbc.weightx = 1.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
         panelSup.add(cmbJugador, gbc);
+
         gbc.gridx = 2;
-        JButton btnRefrescar = new JButton("Actualizar");
+        gbc.weightx = 0;
+        gbc.fill = GridBagConstraints.NONE;
+        EstilosUI.estilizarBotonNeutro(btnRefrescar);
         btnRefrescar.addActionListener(e -> cargarJugadores());
         panelSup.add(btnRefrescar, gbc);
 
+        EstilosUI.estilizarEstadoInfo(lblEstadoAcceso);
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        gbc.gridwidth = 3;
+        gbc.weightx = 1.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        panelSup.add(lblEstadoAcceso, gbc);
+
+        // Superficie imprimible intencionalmente blanca para impresión física fiel
         panelCredencial.setPreferredSize(new Dimension(560, 260));
 
-        JPanel panelAcciones = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 6));
-        JButton btnImprimir = new JButton("Imprimir credencial");
+        EstilosUI.estilizarBotonPrimario(btnImprimir);
         btnImprimir.addActionListener(e -> imprimir());
-        JButton btnVolver = new JButton("Volver al menú");
-        btnVolver.addActionListener(e -> dispose());
-        panelAcciones.add(btnImprimir);
-        panelAcciones.add(btnVolver);
 
-        JPanel panelCentro = new JPanel(new BorderLayout(8, 8));
-        panelCentro.setBackground(Color.WHITE);
+        JButton btnVolver = new JButton("Volver al menú");
+        EstilosUI.estilizarBotonNeutro(btnVolver);
+        btnVolver.addActionListener(e -> dispose());
+
+        JPanel panelAcciones = EstilosUI.crearBarraAcciones(
+                new JComponent[]{btnImprimir},
+                new JComponent[]{btnVolver});
+
+        JPanel panelCentro = new JPanel(new BorderLayout(12, 12));
+        panelCentro.setBackground(EstilosUI.BG_CANVAS);
         panelCentro.add(panelSup, BorderLayout.NORTH);
         panelCentro.add(panelCredencial, BorderLayout.CENTER);
 
+        panel.add(panelEncabezado, BorderLayout.NORTH);
         panel.add(panelCentro, BorderLayout.CENTER);
         panel.add(panelAcciones, BorderLayout.SOUTH);
         setContentPane(panel);
         pack();
-        setMinimumSize(new Dimension(620, 500));
+        setMinimumSize(new Dimension(680, 540));
     }
 
     private void cargarJugadores() {
         jugadores.clear();
+        boolean autorizado = tieneAccesoAutorizado();
+        cmbJugador.setEnabled(autorizado);
+        btnRefrescar.setEnabled(autorizado);
+        btnImprimir.setEnabled(autorizado);
+
+        if (!autorizado) {
+            cmbJugador.setModel(new DefaultComboBoxModel<>());
+            panelCredencial.setJugador(null);
+            lblEstadoAcceso.setText("Acceso denegado: requiere sesión de Administrador u Organizador autenticado.");
+            return;
+        }
+
         try {
-            jugadores.addAll(jugadorDAO.buscarTodos());
+            // DEF-010: solo se ofrecen para credencial los jugadores habilitados (ACTIVO).
+            jugadores.addAll(jugadoresHabilitadosParaCredencial(
+                    gestorJugadores.listarJugadoresParaCredencial(operador)));
+            lblEstadoAcceso.setText(jugadores.isEmpty()
+                    ? "No hay jugadores habilitados disponibles."
+                    : jugadores.size() + " jugador(es) habilitado(s) para emisión de credencial.");
+        } catch (TorneoExcepcion ex) {
+            lblEstadoAcceso.setText(ex.getMessage());
         } catch (Exception e) {
-            // Se informa al usuario al elegir el jugador.
+            lblEstadoAcceso.setText("No se pudieron consultar los jugadores habilitados.");
         }
         DefaultComboBoxModel<String> modelo = new DefaultComboBoxModel<>();
         for (Jugador j : jugadores) {
             modelo.addElement(j.getNombre() + " (DNI " + j.getDni() + ")");
         }
         cmbJugador.setModel(modelo);
-        cmbJugador.addActionListener(e -> panelCredencial.setJugador(jugadorSeleccionado()));
         panelCredencial.setJugador(jugadorSeleccionado());
+    }
+
+    /**
+     * DEF-010: filtra los jugadores aptos para recibir credencial.
+     *
+     * <p>Regla de dominio (ADR-13): el estado del jugador modela su condición de salud y
+     * aptitud administrativa. Solo un jugador {@code ACTIVO} puede recibir credencial; uno
+     * suspendido, lesionado o inhabilitado no.
+     *
+     * @param jugadores lista completa de jugadores
+     * @return los jugadores habilitados para credencial
+     */
+    public static List<Jugador> jugadoresHabilitadosParaCredencial(List<Jugador> jugadores) {
+        List<Jugador> habilitados = new ArrayList<>();
+        if (jugadores == null) {
+            return habilitados;
+        }
+        for (Jugador j : jugadores) {
+            if (j != null && j.getEstado() == TiposDatos.EstadoJugador.ACTIVO) {
+                habilitados.add(j);
+            }
+        }
+        return habilitados;
     }
 
     private Jugador jugadorSeleccionado() {
@@ -128,6 +205,12 @@ public class FrmCredencialJugador extends JFrame {
     }
 
     private void imprimir() {
+        if (!tieneAccesoAutorizado()) {
+            JOptionPane.showMessageDialog(this,
+                    "Acceso denegado: solo un Administrador u Organizador autenticado puede imprimir credenciales.",
+                    "Acceso denegado", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
         Jugador jugador = jugadorSeleccionado();
         if (jugador == null) {
             JOptionPane.showMessageDialog(this, "Seleccione un jugador para imprimir su credencial.",

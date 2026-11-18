@@ -156,11 +156,16 @@ public class PobladorBaseDemo {
                 System.out.println("[INFO] Torneo ya existe: Torneo Apertura 2026 — R1 Demo (ID: " + torneo.getIdTorneo() + ")");
             }
 
-            // Obtener primera fase del torneo
+            // Asegurar fases del torneo (idempotente). El esquema exige id_fase en cada
+            // partido, por lo que un torneo sin fases no permite programar encuentros.
             FaseDAO faseDAO = new FaseDAO();
             List<Fase> fases = faseDAO.buscarPorTorneo(conn, torneo.getIdTorneo());
             if (fases.isEmpty()) {
-                throw new IllegalStateException("El torneo no posee fase creada.");
+                torneoService.agregarFase(torneo.getIdTorneo(), "Fecha Unica", 1, true, admin);
+                torneoService.agregarFase(torneo.getIdTorneo(), "Playoffs", 2, true, admin);
+                fases = faseDAO.buscarPorTorneo(conn, torneo.getIdTorneo());
+                System.out.println("[OK] Fases creadas: Fecha Unica (ID: " + fases.get(0).getIdFase()
+                        + ") y Playoffs (ID: " + fases.get(1).getIdFase() + ")");
             }
             Fase fase1 = fases.get(0);
 
@@ -170,8 +175,15 @@ public class PobladorBaseDemo {
             List<Partido> partidosExistentes = partidoDAO.buscarPorFase(conn, fase1.getIdFase());
 
             if (partidosExistentes.isEmpty()) {
-                cal.set(2026, Calendar.NOVEMBER, 13, 18, 0, 0);
-                Date fechaPartido = cal.getTime();
+                // El encuentro demonstrativo se programa ayer a las 18:00 para que el arbitro
+                // pueda cerrar el acta con una hora real de finalizacion ya transcurrida.
+                Calendar diaPartido = Calendar.getInstance();
+                diaPartido.add(Calendar.DAY_OF_MONTH, -1);
+                diaPartido.set(Calendar.HOUR_OF_DAY, 18);
+                diaPartido.set(Calendar.MINUTE, 0);
+                diaPartido.set(Calendar.SECOND, 0);
+                diaPartido.set(Calendar.MILLISECOND, 0);
+                Date fechaPartido = diaPartido.getTime();
                 Partido p = partidoService.programarPartido(fase1.getIdFase(), eq1.getIdEquipo(), eq2.getIdEquipo(),
                         cancha.getIdCancha(), arb1.getId(), fechaPartido, 90, admin);
                 System.out.println("[OK] Partido programado exitosamente (ID: " + p.getIdPartido() + ")");

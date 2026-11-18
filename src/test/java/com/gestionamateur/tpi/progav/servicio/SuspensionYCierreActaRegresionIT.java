@@ -43,6 +43,9 @@ public class SuspensionYCierreActaRegresionIT {
     @BeforeAll
     static void setUp() throws SQLException {
         assertTrue(ConexionBD.comprobarConexion(), "PostgreSQL debe estar activo en puerto 55432 y accesible");
+        // DEF-004: fail-closed. La base efectiva de la suite debe ser la base de pruebas declarada.
+        // y nunca una base reservada (demostracion, inf06_test o temporal historica de auditoria).
+        ConexionBD.validarDestinoDePruebas();
 
         partidoService = new PartidoService();
         gestorPartidos = new GestorPartidos();
@@ -335,9 +338,9 @@ public class SuspensionYCierreActaRegresionIT {
         FixturePartido f = crearFixturePartido(s);
 
         // Registrar incidencias individuales: 2 goles local, 1 gol visitante
-        partidoService.registrarIncidencia(f.idPartido, f.idJugadorLocal, 15, TiposDatos.TipoAccion.GOL, null, "Gol de jugada");
-        partidoService.registrarIncidencia(f.idPartido, f.idJugadorLocal, 35, TiposDatos.TipoAccion.GOL, null, "Gol de cabeza");
-        partidoService.registrarIncidencia(f.idPartido, f.idJugadorVisitante, 60, TiposDatos.TipoAccion.GOL, null, "Gol de penal");
+        partidoService.registrarIncidencia(f.idPartido, f.idJugadorLocal, 15, TiposDatos.TipoAccion.GOL, null, "Gol de jugada", f.arbitro);
+        partidoService.registrarIncidencia(f.idPartido, f.idJugadorLocal, 35, TiposDatos.TipoAccion.GOL, null, "Gol de cabeza", f.arbitro);
+        partidoService.registrarIncidencia(f.idPartido, f.idJugadorVisitante, 60, TiposDatos.TipoAccion.GOL, null, "Gol de penal", f.arbitro);
 
         // Cierre con marcador coincidente: 2 - 1
         String resultado = gestorPartidos.procesarActa(f.idPartido, "2", "1", f.arbitro);

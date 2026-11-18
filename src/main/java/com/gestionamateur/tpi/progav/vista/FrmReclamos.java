@@ -3,12 +3,10 @@ package com.gestionamateur.tpi.progav.vista;
 import com.gestionamateur.tpi.progav.controlador.GestorReclamos;
 import com.gestionamateur.tpi.progav.modelo.Reclamo;
 import com.gestionamateur.tpi.progav.modelo.Usuario;
+import com.gestionamateur.tpi.progav.seguridad.PoliticaPermisos;
 
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
@@ -17,9 +15,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 import javax.swing.BorderFactory;
-import javax.swing.DefaultComboBoxModel;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
+import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -27,7 +25,9 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
+import javax.swing.SwingConstants;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableColumnModel;
 
 /**
  * CU-14: bandeja de reclamos formales y resolucion por el organizador.
@@ -43,6 +43,7 @@ public class FrmReclamos extends JFrame {
     private final JComboBox<String> cmbVeredicto = new JComboBox<>();
     private final JTextArea txtJustificacion = new JTextArea(6, 42);
     private final JLabel lblInfo = new JLabel(" ");
+    private final JButton btnResolver = new JButton("Resolver reclamo (seleccionado)");
 
     private final DefaultTableModel modeloTabla = new DefaultTableModel(
             new Object[]{"ID", "Fecha", "Motivo", "Partido", "Capitán", "Sanción apelada"}, 0) {
@@ -63,73 +64,117 @@ public class FrmReclamos extends JFrame {
     }
 
     private void initComponents() {
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
-        panel.setBackground(Color.WHITE);
+        JPanel panel = new JPanel(new BorderLayout(12, 12));
+        EstilosUI.estilizarVentana(panel);
+
+        JPanel panelEncabezado = EstilosUI.crearEncabezado(
+                "Reclamos formales",
+                "Bandeja de reclamos pendientes y dictamen fundamentado del organizador (CU-14)");
 
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(4, 4, 4, 4);
+        gbc.insets = new Insets(6, 6, 6, 10);
         gbc.anchor = GridBagConstraints.WEST;
 
         JPanel panelSup = new JPanel(new GridBagLayout());
-        panelSup.setBackground(Color.WHITE);
-        JLabel titulo = new JLabel("Reclamos formales");
-        titulo.setFont(new Font("Segoe UI", Font.BOLD, 20));
-        titulo.setForeground(new Color(0x12, 0x38, 0x5C));
+        EstilosUI.estilizarTarjeta(panelSup);
+
+        JLabel lblSeccion = new JLabel("Resolución del reclamo");
+        EstilosUI.estilizarTituloSeccion(lblSeccion);
         gbc.gridx = 0;
         gbc.gridy = 0;
         gbc.gridwidth = 3;
-        panelSup.add(titulo, gbc);
+        panelSup.add(lblSeccion, gbc);
 
+        JLabel lblVeredicto = new JLabel("Veredicto:");
+        EstilosUI.estilizarEtiquetaCampo(lblVeredicto);
         gbc.gridwidth = 1;
         gbc.gridy = 1;
-        panelSup.add(new JLabel("Veredicto:"), gbc);
-        gbc.gridx = 1;
+        panelSup.add(lblVeredicto, gbc);
+
         cmbVeredicto.addItem("A FAVOR");
         cmbVeredicto.addItem("EN CONTRA");
-        cmbVeredicto.setPreferredSize(new Dimension(170, 24));
+        EstilosUI.estilizarCombo(cmbVeredicto);
+        gbc.gridx = 1;
         panelSup.add(cmbVeredicto, gbc);
 
+        JLabel lblFundamento = new JLabel("Fundamentación (mínimo 15 caracteres):");
+        EstilosUI.estilizarEtiquetaCampo(lblFundamento);
         gbc.gridx = 0;
         gbc.gridy = 2;
-        panelSup.add(new JLabel("Fundamentación (mínimo 15 caracteres):"), gbc);
-        gbc.gridx = 1;
-        gbc.gridwidth = 2;
+        gbc.anchor = GridBagConstraints.NORTHWEST;
+        panelSup.add(lblFundamento, gbc);
+
         txtJustificacion.setLineWrap(true);
         txtJustificacion.setWrapStyleWord(true);
-        panelSup.add(txtJustificacion, gbc);
+        EstilosUI.estilizarAreaTexto(txtJustificacion);
+        txtJustificacion.setBorder(BorderFactory.createEmptyBorder(6, 8, 6, 8));
+        JScrollPane scrollJustificacion = new JScrollPane(
+                txtJustificacion,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollJustificacion.setBorder(BorderFactory.createLineBorder(EstilosUI.BORDER_DEFAULT, 1));
+        scrollJustificacion.getViewport().setBackground(EstilosUI.BG_CONTROL);
+        scrollJustificacion.setPreferredSize(new Dimension(520, 105));
+        scrollJustificacion.setMinimumSize(new Dimension(320, 90));
+        gbc.gridx = 1;
+        gbc.gridwidth = 2;
+        gbc.weightx = 1.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.anchor = GridBagConstraints.WEST;
+        panelSup.add(scrollJustificacion, gbc);
 
+        EstilosUI.estilizarEstadoInfo(lblInfo);
         gbc.gridx = 0;
         gbc.gridy = 3;
         gbc.gridwidth = 3;
-        lblInfo.setForeground(new Color(0x3A, 0x55, 0x68));
         panelSup.add(lblInfo, gbc);
 
         JScrollPane scroll = new JScrollPane(tablaReclamos);
-        scroll.setPreferredSize(new Dimension(900, 240));
+        scroll.setPreferredSize(new Dimension(900, 220));
+        EstilosUI.estilizarTabla(tablaReclamos, scroll);
+        TableColumnModel columnas = tablaReclamos.getColumnModel();
+        if (columnas.getColumnCount() >= 6) {
+            columnas.getColumn(0).setPreferredWidth(55);
+            columnas.getColumn(0).setMaxWidth(75);
+            columnas.getColumn(0).setCellRenderer(EstilosUI.crearRendererCebra(SwingConstants.CENTER));
+        }
 
-        JPanel panelAcciones = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 6));
-        JButton btnResolver = new JButton("Resolver reclamo (seleccionado)");
+        EstilosUI.estilizarBotonPrimario(btnResolver);
         btnResolver.addActionListener(e -> resolver());
-        JButton btnVolver = new JButton("Volver al menú");
-        btnVolver.addActionListener(e -> dispose());
-        panelAcciones.add(btnResolver);
-        panelAcciones.add(btnVolver);
 
-        JPanel panelCentro = new JPanel(new BorderLayout(6, 6));
-        panelCentro.setBackground(Color.WHITE);
+        JButton btnVolver = new JButton("Volver al menú");
+        EstilosUI.estilizarBotonNeutro(btnVolver);
+        btnVolver.addActionListener(e -> dispose());
+
+        JPanel panelAcciones = EstilosUI.crearBarraAcciones(
+                new JComponent[]{btnResolver},
+                new JComponent[]{btnVolver});
+
+        JPanel panelCentro = new JPanel(new BorderLayout(12, 12));
+        panelCentro.setBackground(EstilosUI.BG_CANVAS);
         panelCentro.add(panelSup, BorderLayout.NORTH);
         panelCentro.add(scroll, BorderLayout.CENTER);
 
+        panel.add(panelEncabezado, BorderLayout.NORTH);
         panel.add(panelCentro, BorderLayout.CENTER);
         panel.add(panelAcciones, BorderLayout.SOUTH);
         setContentPane(panel);
         pack();
-        setMinimumSize(new Dimension(940, 620));
+        setMinimumSize(new Dimension(960, 620));
     }
 
     private void cargarReclamos() {
-        reclamos = gestorReclamos.listarPendientes();
+        boolean autorizado = PoliticaPermisos.tienePermisoOperacion(
+                operador, PoliticaPermisos.ModuloMenu.RESOLVER_RECLAMOS);
+        btnResolver.setEnabled(autorizado);
+        cmbVeredicto.setEnabled(autorizado);
+        if (!autorizado) {
+            reclamos = new ArrayList<>();
+            modeloTabla.setRowCount(0);
+            lblInfo.setText("Acceso denegado: requiere sesión de Organizador o Administrador.");
+            return;
+        }
+        reclamos = gestorReclamos.listarPendientes(operador);
         modeloTabla.setRowCount(0);
         for (Reclamo r : reclamos) {
             modeloTabla.addRow(new Object[]{

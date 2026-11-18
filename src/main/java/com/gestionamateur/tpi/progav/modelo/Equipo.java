@@ -16,6 +16,7 @@ public class Equipo {
     private String colorCamiseta;
     private Cancha sedeHabitual;
     private Usuario capitan;
+    private boolean activo = true;
     private List<Jugador> plantel;
 
     // Constructor vacío (JPA)
@@ -112,4 +113,7 @@ public class Equipo {
     public void setPlantel(List<Jugador> plantel) {
         this.plantel = plantel != null ? new ArrayList<>(plantel) : new ArrayList<>();
     }
+
+    public boolean isActivo() { return activo; }
+    public void setActivo(boolean activo) { this.activo = activo; }
 }

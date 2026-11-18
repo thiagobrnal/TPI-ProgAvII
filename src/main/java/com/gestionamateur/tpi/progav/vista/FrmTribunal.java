@@ -1,16 +1,13 @@
 package com.gestionamateur.tpi.progav.vista;
 
 import com.gestionamateur.tpi.progav.controlador.GestorDisciplina;
-import com.gestionamateur.tpi.progav.dao.JugadorDAO;
 import com.gestionamateur.tpi.progav.modelo.Jugador;
 import com.gestionamateur.tpi.progav.modelo.Sancion;
 import com.gestionamateur.tpi.progav.modelo.Usuario;
+import com.gestionamateur.tpi.progav.seguridad.PoliticaPermisos;
 
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
@@ -18,10 +15,10 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
 
-import javax.swing.BorderFactory;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
+import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -29,7 +26,9 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
+import javax.swing.SwingConstants;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableColumnModel;
 
 /**
  * CU-12: tribunal disciplinario. Permite emitir el fallo sobre las sanciones pendientes,
@@ -41,7 +40,6 @@ public class FrmTribunal extends JFrame {
 
     private final Usuario operador;
     private final GestorDisciplina gestorDisciplina = new GestorDisciplina();
-    private final JugadorDAO jugadorDAO = new JugadorDAO();
 
     private List<Sancion> sanciones = new ArrayList<>();
     private List<Jugador> jugadores = new ArrayList<>();
@@ -51,6 +49,9 @@ public class FrmTribunal extends JFrame {
     private final JTextField txtMotivo = new JTextField(34);
     private final JTextField txtGravedad = new JTextField(16);
     private final JLabel lblInfo = new JLabel(" ");
+    private final JButton btnEmitir = new JButton("Emitir fallo (sancion seleccionada)");
+    private final JButton btnAnular = new JButton("Anular sancion (seleccionada)");
+    private final JButton btnRegistrar = new JButton("Registrar sancion administrativa");
 
     private final DefaultTableModel modeloTabla = new DefaultTableModel(
             new Object[]{"ID", "Jugador", "Origen", "Motivo", "Gravedad", "Fecha"}, 0) {
@@ -71,89 +72,147 @@ public class FrmTribunal extends JFrame {
     }
 
     private void initComponents() {
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
-        panel.setBackground(Color.WHITE);
+        JPanel panel = new JPanel(new BorderLayout(12, 12));
+        EstilosUI.estilizarVentana(panel);
+
+        JPanel panelEncabezado = EstilosUI.crearEncabezado(
+                "Tribunal disciplinario",
+                "Resolución de sanciones pendientes, anulación y sanciones administrativas (CU-12)");
 
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(4, 4, 4, 4);
+        gbc.insets = new Insets(6, 6, 6, 10);
         gbc.anchor = GridBagConstraints.WEST;
 
         JPanel panelSup = new JPanel(new GridBagLayout());
-        panelSup.setBackground(Color.WHITE);
-        JLabel titulo = new JLabel("Tribunal disciplinario");
-        titulo.setFont(new Font("Segoe UI", Font.BOLD, 20));
-        titulo.setForeground(new Color(0x12, 0x38, 0x5C));
+        EstilosUI.estilizarTarjeta(panelSup);
+
+        JLabel lblSeccion = new JLabel("Fallo o sanción disciplinaria");
+        EstilosUI.estilizarTituloSeccion(lblSeccion);
         gbc.gridx = 0;
         gbc.gridy = 0;
         gbc.gridwidth = 4;
-        panelSup.add(titulo, gbc);
+        panelSup.add(lblSeccion, gbc);
 
+        JLabel lblJugador = new JLabel("Jugador:");
+        EstilosUI.estilizarEtiquetaCampo(lblJugador);
         gbc.gridwidth = 1;
         gbc.gridy = 1;
-        panelSup.add(new JLabel("Jugador:"), gbc);
+        panelSup.add(lblJugador, gbc);
+
+        EstilosUI.estilizarCombo(cmbJugador);
+        cmbJugador.setPreferredSize(new Dimension(260, 30));
         gbc.gridx = 1;
-        cmbJugador.setPreferredSize(new Dimension(260, 24));
+        gbc.weightx = 0.6;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
         panelSup.add(cmbJugador, gbc);
+
+        JLabel lblFechas = new JLabel("Fechas de suspensión:");
+        EstilosUI.estilizarEtiquetaCampo(lblFechas);
         gbc.gridx = 2;
-        panelSup.add(new JLabel("Fechas de suspensión:"), gbc);
+        gbc.weightx = 0;
+        gbc.fill = GridBagConstraints.NONE;
+        panelSup.add(lblFechas, gbc);
+
+        EstilosUI.estilizarCampoTexto(txtPartidos, "1");
         gbc.gridx = 3;
+        gbc.weightx = 0.2;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
         panelSup.add(txtPartidos, gbc);
 
+        JLabel lblMotivo = new JLabel("Motivo:");
+        EstilosUI.estilizarEtiquetaCampo(lblMotivo);
         gbc.gridx = 0;
         gbc.gridy = 2;
-        panelSup.add(new JLabel("Motivo:"), gbc);
-        gbc.gridx = 1;
-        gbc.gridwidth = 2;
-        panelSup.add(txtMotivo, gbc);
-        gbc.gridx = 3;
-        gbc.gridwidth = 1;
-        panelSup.add(new JLabel("Gravedad:"), gbc);
+        gbc.weightx = 0;
+        gbc.fill = GridBagConstraints.NONE;
+        panelSup.add(lblMotivo, gbc);
 
-        gbc.gridx = 0;
-        gbc.gridy = 3;
-        panelSup.add(new JLabel(" "), gbc);
+        EstilosUI.estilizarCampoTexto(txtMotivo, "Detalle o fundamento disciplinario");
         gbc.gridx = 1;
         gbc.gridwidth = 3;
+        gbc.weightx = 1.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        panelSup.add(txtMotivo, gbc);
+
+        JLabel lblGravedad = new JLabel("Gravedad:");
+        EstilosUI.estilizarEtiquetaCampo(lblGravedad);
+        gbc.gridx = 0;
+        gbc.gridy = 3;
+        gbc.gridwidth = 1;
+        gbc.weightx = 0;
+        gbc.fill = GridBagConstraints.NONE;
+        panelSup.add(lblGravedad, gbc);
+
+        EstilosUI.estilizarCampoTexto(txtGravedad, "Ej: LEVE / GRAVE");
+        gbc.gridx = 1;
+        gbc.gridy = 3;
+        gbc.gridwidth = 3;
+        gbc.weightx = 1.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
         panelSup.add(txtGravedad, gbc);
 
+        EstilosUI.estilizarEstadoInfo(lblInfo);
         gbc.gridx = 0;
         gbc.gridy = 4;
         gbc.gridwidth = 4;
-        lblInfo.setForeground(new Color(0x3A, 0x55, 0x68));
         panelSup.add(lblInfo, gbc);
 
         JScrollPane scroll = new JScrollPane(tablaSanciones);
-        scroll.setPreferredSize(new Dimension(900, 250));
+        scroll.setPreferredSize(new Dimension(900, 240));
+        EstilosUI.estilizarTabla(tablaSanciones, scroll);
+        TableColumnModel columnas = tablaSanciones.getColumnModel();
+        if (columnas.getColumnCount() >= 6) {
+            columnas.getColumn(0).setPreferredWidth(55);
+            columnas.getColumn(0).setMaxWidth(75);
+            columnas.getColumn(0).setCellRenderer(EstilosUI.crearRendererCebra(SwingConstants.CENTER));
+        }
 
-        JPanel panelAcciones = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 6));
-        JButton btnEmitir = new JButton("Emitir fallo (sancion seleccionada)");
+        EstilosUI.estilizarBotonPrimario(btnEmitir);
         btnEmitir.addActionListener(e -> emitirFallo());
-        JButton btnAnular = new JButton("Anular sancion (seleccionada)");
-        btnAnular.addActionListener(e -> anular());
-        JButton btnRegistrar = new JButton("Registrar sancion administrativa");
-        btnRegistrar.addActionListener(e -> registrarAdministrativa());
-        JButton btnVolver = new JButton("Volver al menú");
-        btnVolver.addActionListener(e -> dispose());
-        panelAcciones.add(btnEmitir);
-        panelAcciones.add(btnAnular);
-        panelAcciones.add(btnRegistrar);
-        panelAcciones.add(btnVolver);
 
-        JPanel panelCentro = new JPanel(new BorderLayout(6, 6));
-        panelCentro.setBackground(Color.WHITE);
+        EstilosUI.estilizarBotonPeligro(btnAnular);
+        btnAnular.addActionListener(e -> anular());
+
+        EstilosUI.estilizarBotonAdvertencia(btnRegistrar);
+        btnRegistrar.addActionListener(e -> registrarAdministrativa());
+
+        JButton btnVolver = new JButton("Volver al menú");
+        EstilosUI.estilizarBotonNeutro(btnVolver);
+        btnVolver.addActionListener(e -> dispose());
+
+        JPanel panelAcciones = EstilosUI.crearBarraAcciones(
+                new JComponent[]{btnEmitir, btnAnular, btnRegistrar},
+                new JComponent[]{btnVolver});
+
+        JPanel panelCentro = new JPanel(new BorderLayout(12, 12));
+        panelCentro.setBackground(EstilosUI.BG_CANVAS);
         panelCentro.add(panelSup, BorderLayout.NORTH);
         panelCentro.add(scroll, BorderLayout.CENTER);
 
+        panel.add(panelEncabezado, BorderLayout.NORTH);
         panel.add(panelCentro, BorderLayout.CENTER);
         panel.add(panelAcciones, BorderLayout.SOUTH);
         setContentPane(panel);
         pack();
-        setMinimumSize(new Dimension(940, 620));
+        setMinimumSize(new Dimension(960, 620));
     }
 
     private void cargarDatos() {
-        sanciones = gestorDisciplina.listarPendientes();
+        boolean autorizado = PoliticaPermisos.tienePermisoOperacion(
+                operador, PoliticaPermisos.ModuloMenu.TRIBUNAL_DISCIPLINARIO);
+        btnEmitir.setEnabled(autorizado);
+        btnAnular.setEnabled(autorizado);
+        btnRegistrar.setEnabled(autorizado);
+        cmbJugador.setEnabled(autorizado);
+        if (!autorizado) {
+            sanciones = new ArrayList<>();
+            jugadores = new ArrayList<>();
+            modeloTabla.setRowCount(0);
+            cmbJugador.setModel(new DefaultComboBoxModel<>());
+            lblInfo.setText("Acceso denegado: requiere sesión de Organizador o Administrador.");
+            return;
+        }
+        sanciones = gestorDisciplina.listarPendientes(operador);
         modeloTabla.setRowCount(0);
         for (Sancion s : sanciones) {
             modeloTabla.addRow(new Object[]{
@@ -170,12 +229,7 @@ public class FrmTribunal extends JFrame {
             lblInfo.setText("Seleccione una fila de la tabla para emitir el fallo o anularla.");
         }
 
-        jugadores = new ArrayList<>();
-        try {
-            jugadores.addAll(jugadorDAO.buscarTodos());
-        } catch (Exception e) {
-            lblInfo.setText("No se pudieron cargar los jugadores del torneo.");
-        }
+        jugadores = gestorDisciplina.listarJugadores(operador);
         DefaultComboBoxModel<String> modelo = new DefaultComboBoxModel<>();
         for (Jugador j : jugadores) {
             modelo.addElement(j.getNombre() + " (DNI " + j.getDni() + ")");

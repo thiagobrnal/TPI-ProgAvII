@@ -48,6 +48,14 @@ public class GestorJugadores {
         }
     }
 
+    public List<Jugador> listarJugadoresAutorizados(Usuario operador) throws TorneoExcepcion {
+        return jugadorService.listarJugadoresAutorizados(operador);
+    }
+
+    public List<Jugador> listarJugadoresParaCredencial(Usuario operador) throws TorneoExcepcion {
+        return jugadorService.listarJugadoresParaCredencial(operador);
+    }
+
     public static List<Jugador> getJugadoresRegistrados() {
         try {
             JugadorDAO dao = new JugadorDAO();

@@ -193,12 +193,49 @@ public class SancionDAO {
         }
     }
 
+    /**
+     * DEF-014: sanciones computables para el cumplimiento de fechas de suspension.
+     *
+     * <p>Solo las sanciones {@code ACTIVA} (oficializadas por el tribunal) consumen fechas de
+     * suspension. Una sancion {@code PENDIENTE} que aun espera el fallo del tribunal no puede
+     * cumplirse por el mero hecho de que el jugador dispute otro partido: de lo contrario la
+     * suspension se agotaba en silencio y el jugadorvolvia a estar habilitado sin que el tribunal
+     * se hubiera expedido nunca.
+     */
+    public List<Sancion> buscarSancionesCumpliblesPorJugador(Connection conn, Long idJugador, Long idTorneo) throws SQLException {
+        String sql = "SELECT id_sancion, id_jugador, id_partido_origen, id_torneo, alcance, tipo_origen, "
+                   + "motivo, gravedad, partidos_suspension, fechas_cumplidas, fecha_inicio, fecha_fin, fecha_publicacion_formal, estado "
+                   + "FROM sanciones "
+                   + "WHERE id_jugador = ? "
+                   + "  AND estado = 'ACTIVA' "
+                   + "  AND (alcance = 'GLOBAL' OR id_torneo = ?) "
+                   + "ORDER BY fecha_inicio ASC";
+        List<Sancion> lista = new ArrayList<>();
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, idJugador);
+            if (idTorneo != null) {
+                ps.setLong(2, idTorneo);
+            } else {
+                ps.setNull(2, Types.BIGINT);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    lista.add(mapearSancion(conn, rs));
+                }
+            }
+        }
+        return lista;
+    }
+
     public void registrarFechaCumplida(Connection conn, Long idSancion) throws SQLException {
+        // DEF-014: solo una sancion ACTIVA puede consumir una fecha de suspension.
+        // La condicion de estado en el WHERE impide que una sancion PENDIENTE salte
+        // directamente a CUMPLIDA sin fallo del tribunal.
         String sql = "UPDATE sanciones "
                    + "SET fechas_cumplidas = fechas_cumplidas + 1, "
                    + "    estado = CASE WHEN fechas_cumplidas + 1 >= partidos_suspension THEN 'CUMPLIDA' ELSE estado END, "
                    + "    fecha_fin = CASE WHEN fechas_cumplidas + 1 >= partidos_suspension THEN CURRENT_DATE ELSE fecha_fin END "
-                   + "WHERE id_sancion = ?";
+                   + "WHERE id_sancion = ? AND estado = 'ACTIVA'";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, idSancion);
             ps.executeUpdate();

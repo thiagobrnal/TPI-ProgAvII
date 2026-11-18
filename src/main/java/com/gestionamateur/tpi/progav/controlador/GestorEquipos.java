@@ -24,10 +24,14 @@ public class GestorEquipos {
 
     // CU 1: Gestionar Equipos (Alta con persistencia estricta)
     public String registrarEquipo(String nombre, Categoria categoria, String colorCamiseta, Cancha sede, Usuario capitan) {
-        return registrarEquipo(nombre, categoria, colorCamiseta, sede, capitan, null);
+        return registrarEquipo(nombre, null, categoria, colorCamiseta, sede, capitan, null);
     }
 
     public String registrarEquipo(String nombre, Categoria categoria, String colorCamiseta, Cancha sede, Usuario capitan, Usuario operador) {
+        return registrarEquipo(nombre, null, categoria, colorCamiseta, sede, capitan, operador);
+    }
+
+    public String registrarEquipo(String nombre, String alias, Categoria categoria, String colorCamiseta, Cancha sede, Usuario capitan, Usuario operador) {
         if (nombre == null || nombre.trim().isEmpty()) {
             return "ERROR: El nombre del equipo no puede estar vacío.";
         }
@@ -39,7 +43,7 @@ public class GestorEquipos {
         }
 
         try {
-            Equipo eq = equipoService.registrarEquipo(nombre.trim(), null, categoria.getId(), colorCamiseta, sede, capitan.getId(), operador);
+            Equipo eq = equipoService.registrarEquipo(nombre.trim(), alias, categoria.getId(), colorCamiseta, sede, capitan.getId(), operador);
             dbEquipos.add(eq);
             return "ÉXITO: El equipo '" + nombre + "' fue registrado correctamente en la base de datos (ID: " + eq.getIdEquipo() + ").";
         } catch (TorneoExcepcion te) {
@@ -54,6 +58,12 @@ public class GestorEquipos {
     /** CU-01 (alternativa A1): edicion de un equipo registrado. */
     public String actualizarEquipo(Long idEquipo, String nombre, Categoria categoria, String colorCamiseta,
                                    Cancha sede, Usuario capitan, Usuario operador) {
+        return actualizarEquipo(idEquipo, nombre, null, categoria, colorCamiseta, sede, capitan, operador);
+    }
+
+    /** CU-01 (alternativa A1): edicion integral de equipo incluyendo alias. */
+    public String actualizarEquipo(Long idEquipo, String nombre, String alias, Categoria categoria, String colorCamiseta,
+                                   Cancha sede, Usuario capitan, Usuario operador) {
         if (idEquipo == null) {
             return "ERROR: Debe indicar el equipo a editar.";
         }
@@ -67,7 +77,7 @@ public class GestorEquipos {
             return "ERROR: Debe asignar un capitán con cuenta de usuario registrada.";
         }
         try {
-            Equipo eq = equipoService.actualizarEquipo(idEquipo, nombre.trim(), null, categoria.getId(),
+            equipoService.actualizarEquipo(idEquipo, nombre.trim(), alias, categoria.getId(),
                     colorCamiseta, capitan.getId(), sede, operador);
             return "ÉXITO: El equipo '" + nombre + "' fue actualizado correctamente (ID: " + idEquipo + ").";
         } catch (TorneoExcepcion te) {
@@ -75,6 +85,32 @@ public class GestorEquipos {
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Fallo de persistencia JDBC al actualizar equipo: " + e.getMessage());
             return "ERROR DE CONEXIÓN: La base de datos no está disponible (" + e.getMessage() + "). No se guardaron cambios.";
+        }
+    }
+
+    /** CU-01: baja lógica o reactivación de un equipo preservando su historial. */
+    public String cambiarEstadoEquipo(Long idEquipo, boolean activo, Usuario operador) {
+        try {
+            Equipo eq = equipoService.cambiarEstadoEquipo(idEquipo, activo, operador);
+            return "ÉXITO: El equipo '" + eq.getNombre() + "' quedó " + (activo ? "ACTIVO." : "INACTIVO (baja lógica).");
+        } catch (TorneoExcepcion te) {
+            return "ERROR DE VALIDACIÓN: " + te.getMessage();
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Fallo de persistencia JDBC al cambiar estado de equipo: " + e.getMessage());
+            return "ERROR DE CONEXIÓN: La base de datos no está disponible (" + e.getMessage() + "). No se guardaron cambios.";
+        }
+    }
+
+    public List<Equipo> listarEquiposParaGestion(Usuario operador) throws TorneoExcepcion {
+        return equipoService.listarEquiposParaGestion(operador);
+    }
+
+    public List<Equipo> buscarEquiposActivosDeCapitan(Long idCapitan) {
+        try {
+            return equipoDAO.buscarListaPorCapitan(idCapitan, false);
+        } catch (Exception e) {
+            LOGGER.warning("No se pudieron consultar los equipos del capitán: " + e.getMessage());
+            return new ArrayList<>();
         }
     }
 
