@@ -1,6 +1,7 @@
 package com.gestionamateur.tpi.progav.servicio;
 
 import com.gestionamateur.tpi.progav.dao.ConexionBD;
+import com.gestionamateur.tpi.progav.dao.ControlEjecucionIntegracion;
 import com.gestionamateur.tpi.progav.dao.UsuarioDAO;
 import com.gestionamateur.tpi.progav.modelo.TiposDatos;
 import com.gestionamateur.tpi.progav.modelo.TorneoExcepcion;
@@ -26,13 +27,16 @@ public class BootstrapConcurrenteIT {
 
     private static final String TABLA_TEST = "test_bootstrap_usuarios";
     private static UsuarioDAO usuarioDAO;
+    private static volatile boolean tablaCreada = false;
 
     @BeforeAll
     static void setUp() throws SQLException {
-        assertTrue(ConexionBD.comprobarConexion(), "PostgreSQL debe estar activo en puerto 55432");
-        // DEF-004: fail-closed. La base efectiva de la suite debe ser la base de pruebas declarada.
-        // y nunca una base reservada (demostracion, inf06_test o temporal historica de auditoria).
+        tablaCreada = false;
+        ControlEjecucionIntegracion.exigirHabilitacionExplicita("BootstrapConcurrenteIT");
+        // DEF-004: fail-closed. Activar modo PRUEBAS y validar base antes de comprobarConexion().
+        ConexionBD.activarModoPruebas();
         ConexionBD.validarDestinoDePruebas();
+        assertTrue(ConexionBD.comprobarConexion(), "PostgreSQL debe estar activo en puerto 55432");
         usuarioDAO = new UsuarioDAO();
 
         try (Connection conn = ConexionBD.obtenerConexion();
@@ -48,14 +52,22 @@ public class BootstrapConcurrenteIT {
                      + "id_rol INT NOT NULL, "
                      + "activo BOOLEAN NOT NULL DEFAULT TRUE"
                      + ")");
+            tablaCreada = true;
         }
     }
 
     @AfterAll
     static void tearDown() throws SQLException {
-        try (Connection conn = ConexionBD.obtenerConexion();
-             Statement st = conn.createStatement()) {
-            st.execute("DROP TABLE IF EXISTS " + TABLA_TEST);
+        try {
+            if (tablaCreada) {
+                try (Connection conn = ConexionBD.obtenerConexion();
+                     Statement st = conn.createStatement()) {
+                    st.execute("DROP TABLE IF EXISTS " + TABLA_TEST);
+                }
+            }
+        } finally {
+            tablaCreada = false;
+            ConexionBD.restablecerModoPorDefecto();
         }
     }
 

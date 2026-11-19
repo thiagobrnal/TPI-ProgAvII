@@ -16,6 +16,9 @@
         -->
         <maven.compiler.release>17</maven.compiler.release>
         <exec.mainClass>com.gestionamateur.tpi.progav.TPIProgAv</exec.mainClass>
+        <tpi.it.habilitado>false</tpi.it.habilitado>
+        <it.test>**/*IT.java</it.test>
+        <skipITs>false</skipITs>
     </properties>
 
     <!-- Dependencias externas del proyecto -->
@@ -63,18 +66,18 @@
                 <configuration>
                     <includes>
                         <include>**/*Test.java</include>
-                        <include>**/*IT.java</include>
                     </includes>
+                    <excludes>
+                        <exclude>**/*IT.java</exclude>
+                    </excludes>
                     <systemPropertyVariables>
                         <!--
-                          AISLAMIENTO FAIL-CLOSED (DEF-004).
-                          La URL de la base de pruebas NO se fija en el proyecto: debe proveerse
-                          de forma explicita por variable de entorno o propiedad del sistema.
-                          Si la variable no esta definida, Maven inyecta la referencia sin resolver
-                          y ConexionBD aborta la corrida con un mensaje accionable antes de abrir
-                          cualquier conexion. No existe ningun fallback hacia una base reservada.
-                          Uso:  $env:TPI_TEST_DB_URL = "jdbc:postgresql://127.0.0.1:55432/<base_de_pruebas>"
+                          AISLAMIENTO FAIL-CLOSED (DEF-004 / CORR-E2-MAVEN-IT-01).
+                          Por defecto solo se ejecutan suites unitarias (*Test). Las suites *IT
+                          requieren explicitamente el perfil '-Pintegracion' y '-Dtpi.it.habilitado=true',
+                          ademas de una URL explicita en TPI_TEST_DB_URL.
                         -->
+                        <tpi.it.habilitado>${tpi.it.habilitado}</tpi.it.habilitado>
                         <TPI_TEST_DB_URL>${env.TPI_TEST_DB_URL}</TPI_TEST_DB_URL>
                         <TPI_TEST_DB_USER>${env.TPI_TEST_DB_USER}</TPI_TEST_DB_USER>
                         <TPI_TEST_DB_PASSWORD>${env.TPI_TEST_DB_PASSWORD}</TPI_TEST_DB_PASSWORD>
@@ -118,4 +121,43 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!-- Perfil explicito (sin auto-activacion por entorno): ejecuta suites *IT en fase integration-test -->
+        <profile>
+            <id>integracion</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <version>3.2.5</version>
+                        <executions>
+                            <execution>
+                                <id>pruebas-integracion</id>
+                                <phase>integration-test</phase>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                                <configuration>
+                                    <skipTests>${skipITs}</skipTests>
+                                    <test>${it.test}</test>
+                                    <includes>
+                                        <include>**/*IT.java</include>
+                                    </includes>
+                                    <excludes>
+                                        <exclude>**/*Test.java</exclude>
+                                    </excludes>
+                                    <runOrder>alphabetical</runOrder>
+                                    <parallel>none</parallel>
+                                    <forkCount>1</forkCount>
+                                    <reuseForks>true</reuseForks>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

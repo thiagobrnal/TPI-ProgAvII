@@ -11,6 +11,7 @@ import com.gestionamateur.tpi.progav.modelo.Torneo;
 import com.gestionamateur.tpi.progav.modelo.TorneoExcepcion;
 import com.gestionamateur.tpi.progav.modelo.Usuario;
 import com.gestionamateur.tpi.progav.servicio.AuthService;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,11 +40,12 @@ public class PostgreSqlPersistenceIT {
 
     @BeforeAll
     static void setUp() throws SQLException {
+        ControlEjecucionIntegracion.exigirHabilitacionExplicita("PostgreSqlPersistenceIT");
         // Verificar que la base de datos de test esté activa y respondiendo
-        assertTrue(ConexionBD.comprobarConexion(), "El servidor PostgreSQL no responde en 127.0.0.1:55432");
-        // DEF-004: fail-closed. La base efectiva de la suite debe ser la base de pruebas declarada.
-        // y nunca una base reservada (demostracion, inf06_test o temporal historica de auditoria).
+        // DEF-004: fail-closed. Activar modo PRUEBAS y validar base antes de comprobarConexion().
+        ConexionBD.activarModoPruebas();
         ConexionBD.validarDestinoDePruebas();
+        assertTrue(ConexionBD.comprobarConexion(), "El servidor PostgreSQL no responde en 127.0.0.1:55432");
 
         rolDAO = new RolDAO();
         usuarioDAO = new UsuarioDAO();
@@ -55,6 +57,11 @@ public class PostgreSqlPersistenceIT {
         equipoDAO = new EquipoDAO();
         jugadorDAO = new JugadorDAO();
         configuracionDAO = new ConfiguracionDAO();
+    }
+
+    @AfterAll
+    static void restaurarModoConexion() {
+        ConexionBD.restablecerModoPorDefecto();
     }
 
     @Test

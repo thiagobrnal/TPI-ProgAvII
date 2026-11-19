@@ -78,6 +78,10 @@ public class FrmReportes extends JFrame {
     private final JLabel lblInformacion = new JLabel(" ");
 
     public FrmReportes(Usuario operador) {
+        this(operador, true);
+    }
+
+    FrmReportes(Usuario operador, boolean cargarAlIniciar) {
         this.operador = operador;
         this.pestanaPosiciones = new PestanaReporte(
                 "Tabla de posiciones",
@@ -106,7 +110,9 @@ public class FrmReportes extends JFrame {
         setTitle("Reportes del torneo (CU-19 a CU-22)");
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         initComponents();
-        cargarTodos();
+        if (cargarAlIniciar) {
+            cargarTodos();
+        }
         setLocationRelativeTo(null);
     }
 
