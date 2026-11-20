@@ -4,6 +4,7 @@ import com.gestionamateur.tpi.progav.dao.ArbitroDAO;
 import com.gestionamateur.tpi.progav.dao.CanchaDAO;
 import com.gestionamateur.tpi.progav.dao.CategoriaDAO;
 import com.gestionamateur.tpi.progav.dao.ConexionBD;
+import com.gestionamateur.tpi.progav.dao.ControlEjecucionIntegracion;
 import com.gestionamateur.tpi.progav.dao.EquipoDAO;
 import com.gestionamateur.tpi.progav.dao.JugadorDAO;
 import com.gestionamateur.tpi.progav.dao.UsuarioDAO;
@@ -18,6 +19,7 @@ import com.gestionamateur.tpi.progav.modelo.TiposDatos;
 import com.gestionamateur.tpi.progav.modelo.TransporteCorreo;
 import com.gestionamateur.tpi.progav.modelo.Torneo;
 import com.gestionamateur.tpi.progav.modelo.Usuario;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -58,6 +60,8 @@ public class FuncionalidadPendienteIT {
 
     @BeforeAll
     static void setUp() throws SQLException {
+        ControlEjecucionIntegracion.exigirHabilitacionExplicita("FuncionalidadPendienteIT");
+        ConexionBD.activarModoPruebas();
         ConexionBD.validarDestinoDePruebas();
         usuarioDAO = new UsuarioDAO();
         arbitroDAO = new ArbitroDAO();
@@ -66,6 +70,11 @@ public class FuncionalidadPendienteIT {
         equipoDAO = new EquipoDAO();
         jugadorDAO = new JugadorDAO();
         authService = new AuthService();
+    }
+
+    @AfterAll
+    static void restaurarModoConexion() {
+        ConexionBD.restablecerModoPorDefecto();
     }
 
     private String sufijo() {
@@ -227,6 +236,9 @@ public class FuncionalidadPendienteIT {
     @DisplayName("CU-08 a CU-11: Las consultas publicas devuelven informacion y no exponen datos privados")
     void testConsultasPublicasYPrivacidad() throws Exception {
         ConsultaPublicaService servicio = new ConsultaPublicaService();
+        if (servicio.equipos().isEmpty() || servicio.torneos().isEmpty()) {
+            asegurarDatosConsultaPublica();
+        }
 
         List<Object[]> fixture = servicio.fixture(null);
         List<Object[]> estadisticas = servicio.estadisticasDeJugadores(null);
@@ -297,5 +309,27 @@ public class FuncionalidadPendienteIT {
             }
         }
         return dnis;
+    }
+
+    private void asegurarDatosConsultaPublica() throws Exception {
+        String s = sufijo();
+        Usuario admin = crearUsuario("cu_pub_adm_" + s, TiposDatos.Rol.ADMINISTRADOR);
+        Usuario cap1 = crearUsuario("cu_pub_cap1_" + s, TiposDatos.Rol.CAPITAN);
+        Usuario cap2 = crearUsuario("cu_pub_cap2_" + s, TiposDatos.Rol.CAPITAN);
+        Categoria cat = categoriaDAO.buscarPorId(2L);
+        Cancha cancha = new Cancha("Cancha Pub " + s, "Calle Pub 1", "Sintetico");
+        canchaDAO.insertar(cancha);
+
+        EquipoService equipoService = new EquipoService();
+        Equipo e1 = equipoService.registrarEquipo("Eq Pub A " + s, "PA", cat.getId(), "Verde", cancha,
+                cap1.getId(), admin);
+        Equipo e2 = equipoService.registrarEquipo("Eq Pub B " + s, "PB", cat.getId(), "Blanco", cancha,
+                cap2.getId(), admin);
+
+        TorneoService torneoService = new TorneoService();
+        Torneo torneo = torneoService.crearTorneo("Torneo Pub " + s, "LIGA", 4, new Date(), admin);
+        Fase fase = torneoService.listarFasesDeTorneo(torneo.getIdTorneo()).get(0);
+        new PartidoService().programarPartido(fase.getIdFase(), e1.getIdEquipo(), e2.getIdEquipo(),
+                cancha.getIdCancha(), null, new Date(System.currentTimeMillis() + 86400000L), 90, admin);
     }
 }

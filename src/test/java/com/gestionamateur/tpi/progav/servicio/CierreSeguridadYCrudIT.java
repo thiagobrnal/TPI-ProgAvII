@@ -7,6 +7,7 @@ import com.gestionamateur.tpi.progav.controlador.GestorPartidos;
 import com.gestionamateur.tpi.progav.controlador.GestorUsuarios;
 import com.gestionamateur.tpi.progav.dao.*;
 import com.gestionamateur.tpi.progav.modelo.*;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -46,8 +47,10 @@ public class CierreSeguridadYCrudIT {
 
     @BeforeAll
     static void setUp() throws SQLException {
-        assertTrue(ConexionBD.comprobarConexion(), "PostgreSQL debe estar activo para ejecutar los tests de integración.");
+        ControlEjecucionIntegracion.exigirHabilitacionExplicita("CierreSeguridadYCrudIT");
+        ConexionBD.activarModoPruebas();
         ConexionBD.validarDestinoDePruebas();
+        assertTrue(ConexionBD.comprobarConexion(), "PostgreSQL debe estar activo para ejecutar los tests de integración.");
 
         usuarioDAO = new UsuarioDAO();
         arbitroDAO = new ArbitroDAO();
@@ -72,6 +75,11 @@ public class CierreSeguridadYCrudIT {
         reclamoService = new ReclamoService();
     }
 
+    @AfterAll
+    static void restaurarModoConexion() {
+        ConexionBD.restablecerModoPorDefecto();
+    }
+
     private String sufijo() {
         return UUID.randomUUID().toString().substring(0, 8);
     }
@@ -93,6 +101,16 @@ public class CierreSeguridadYCrudIT {
         return u;
     }
 
+    private Cancha obtenerOCrearCancha() throws SQLException, TorneoExcepcion {
+        List<Cancha> canchas = canchaDAO.buscarTodas();
+        if (!canchas.isEmpty()) {
+            return canchas.get(0);
+        }
+        Cancha nueva = new Cancha("Cancha Base Crud " + sufijo(), "Calle Base 1", "Césped Natural");
+        canchaDAO.insertar(nueva);
+        return nueva;
+    }
+
     @Test
     @DisplayName("SEC-01: Brechas fail-closed cerradas en Canchas, Incidencias, Reportes, Configuración, Tribunal, Reclamos y Jugadores")
     void testBrechasSeguridadFailClosed() throws Exception {
@@ -110,7 +128,7 @@ public class CierreSeguridadYCrudIT {
 
         // 2. PartidoService.registrarIncidencia(6-arg sin operador) es fail-closed
         Categoria cat = categoriaDAO.buscarTodas().get(0);
-        Cancha cancha = canchaDAO.buscarTodas().get(0);
+        Cancha cancha = obtenerOCrearCancha();
         Torneo torneo = torneoService.crearTorneo("Torneo Sec " + s, "LIGA", 4, new Date(), admin);
         Fase fase = torneoService.listarFasesDeTorneo(torneo.getIdTorneo()).get(0);
 
@@ -180,8 +198,7 @@ public class CierreSeguridadYCrudIT {
         Usuario cap1 = crearUsuario("eq_cap1_" + s, TiposDatos.Rol.CAPITAN);
         Usuario cap2 = crearUsuario("eq_cap2_" + s, TiposDatos.Rol.CAPITAN);
         Categoria cat = categoriaDAO.buscarTodas().get(0);
-        List<Cancha> canchas = canchaDAO.buscarTodas();
-        Cancha c1 = canchas.get(0);
+        Cancha c1 = obtenerOCrearCancha();
 
         // Create con alias
         String resCreate = gestorEquipos.registrarEquipo("Club Norte " + s, "CN" + s.substring(0, 4),

@@ -3,6 +3,7 @@ package com.gestionamateur.tpi.progav.servicio;
 import com.gestionamateur.tpi.progav.controlador.GestorPartidos;
 import com.gestionamateur.tpi.progav.dao.*;
 import com.gestionamateur.tpi.progav.modelo.*;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -42,10 +43,11 @@ public class SuspensionYCierreActaRegresionIT {
 
     @BeforeAll
     static void setUp() throws SQLException {
-        assertTrue(ConexionBD.comprobarConexion(), "PostgreSQL debe estar activo en puerto 55432 y accesible");
-        // DEF-004: fail-closed. La base efectiva de la suite debe ser la base de pruebas declarada.
-        // y nunca una base reservada (demostracion, inf06_test o temporal historica de auditoria).
+        ControlEjecucionIntegracion.exigirHabilitacionExplicita("SuspensionYCierreActaRegresionIT");
+        // DEF-004: fail-closed. Activar modo PRUEBAS y validar base antes de comprobarConexion().
+        ConexionBD.activarModoPruebas();
         ConexionBD.validarDestinoDePruebas();
+        assertTrue(ConexionBD.comprobarConexion(), "PostgreSQL debe estar activo en puerto 55432 y accesible");
 
         partidoService = new PartidoService();
         gestorPartidos = new GestorPartidos();
@@ -61,6 +63,11 @@ public class SuspensionYCierreActaRegresionIT {
         partidoEquipoDAO = new PartidoEquipoDAO();
         cronologiaDAO = new CronologiaDAO();
         motivoDAO = new MotivoDAO();
+    }
+
+    @AfterAll
+    static void restaurarModoConexion() {
+        ConexionBD.restablecerModoPorDefecto();
     }
 
     private String sufijo() {

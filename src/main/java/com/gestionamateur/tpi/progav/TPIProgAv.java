@@ -1,11 +1,15 @@
 package com.gestionamateur.tpi.progav;
 
+import com.gestionamateur.tpi.progav.dao.ConexionBD;
 import com.gestionamateur.tpi.progav.modelo.SistemaLogs;
 import com.gestionamateur.tpi.progav.vista.EstilosUI;
 import com.gestionamateur.tpi.progav.vista.FrmLogin;
 
 public class TPIProgAv {
     public static void main(String[] args) {
+        // 0. Activacion explicita de modo APLICACION antes de cualquier acceso potencial a BD
+        ConexionBD.activarModoAplicacion();
+
         // 1. Inicialización de la Bitácora de Eventos
         SistemaLogs.configurar();
 

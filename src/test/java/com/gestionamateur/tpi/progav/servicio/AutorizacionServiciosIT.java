@@ -4,6 +4,7 @@ import com.gestionamateur.tpi.progav.controlador.GestorCanchas;
 import com.gestionamateur.tpi.progav.controlador.GestorUsuarios;
 import com.gestionamateur.tpi.progav.dao.*;
 import com.gestionamateur.tpi.progav.modelo.*;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -37,10 +38,11 @@ public class AutorizacionServiciosIT {
 
     @BeforeAll
     static void setUp() throws SQLException {
-        assertTrue(ConexionBD.comprobarConexion(), "PostgreSQL debe estar activo en puerto 55432");
-        // DEF-004: fail-closed. La base efectiva de la suite debe ser la base de pruebas declarada.
-        // y nunca una base reservada (demostracion, inf06_test o temporal historica de auditoria).
+        ControlEjecucionIntegracion.exigirHabilitacionExplicita("AutorizacionServiciosIT");
+        // DEF-004: fail-closed. Activar modo PRUEBAS y validar base antes de comprobarConexion().
+        ConexionBD.activarModoPruebas();
         ConexionBD.validarDestinoDePruebas();
+        assertTrue(ConexionBD.comprobarConexion(), "PostgreSQL debe estar activo en puerto 55432");
 
         partidoService = new PartidoService();
         torneoService = new TorneoService();
@@ -58,6 +60,11 @@ public class AutorizacionServiciosIT {
         equipoDAO = new EquipoDAO();
         jugadorDAO = new JugadorDAO();
         sancionDAO = new SancionDAO();
+    }
+
+    @AfterAll
+    static void restaurarModoConexion() {
+        ConexionBD.restablecerModoPorDefecto();
     }
 
     private String sufijo() {

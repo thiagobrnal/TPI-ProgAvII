@@ -1,5 +1,7 @@
 package com.gestionamateur.tpi.progav.dao;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -7,7 +9,6 @@ import java.sql.SQLException;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -22,6 +23,37 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @DisplayName("DEF-004: Aislamiento fail-closed de la base de datos de pruebas")
 public class AislamientoBasePruebasTest {
+
+    private String prevPropModo;
+    private String prevPropDbUrl;
+    private String prevPropTestDbUrl;
+
+    @BeforeEach
+    void prepararModoConexion() {
+        prevPropModo = System.getProperty(ConexionBD.PROP_MODO_EJECUCION);
+        prevPropDbUrl = System.getProperty(ConexionBD.ENV_DB_URL);
+        prevPropTestDbUrl = System.getProperty(ConexionBD.ENV_TEST_DB_URL);
+        System.clearProperty(ConexionBD.PROP_MODO_EJECUCION);
+        System.clearProperty(ConexionBD.ENV_DB_URL);
+        System.clearProperty(ConexionBD.ENV_TEST_DB_URL);
+        ConexionBD.restablecerModoPorDefecto();
+    }
+
+    @AfterEach
+    void restaurarModoConexion() {
+        restaurarPropiedad(ConexionBD.PROP_MODO_EJECUCION, prevPropModo);
+        restaurarPropiedad(ConexionBD.ENV_DB_URL, prevPropDbUrl);
+        restaurarPropiedad(ConexionBD.ENV_TEST_DB_URL, prevPropTestDbUrl);
+        ConexionBD.restablecerModoPorDefecto();
+    }
+
+    private static void restaurarPropiedad(String clave, String valor) {
+        if (valor == null) {
+            System.clearProperty(clave);
+        } else {
+            System.setProperty(clave, valor);
+        }
+    }
 
     @Test
     @DisplayName("Extraccion del nombre de base desde distintos formatos de URL JDBC")
@@ -56,7 +88,7 @@ public class AislamientoBasePruebasTest {
     @Test
     @DisplayName("Una base de pruebas exclusiva es aceptada")
     void testBaseDePruebasExclusivaAceptada() {
-        assertDoesNotThrow(() -> ConexionBD.validarBaseDePruebas("tpi_pa2_r1_fix_test_20261111"));
+        assertDoesNotThrow(() -> ConexionBD.validarBaseDePruebas("tpi_pa2_r1_base_descartable_local"));
         assertDoesNotThrow(() -> ConexionBD.validarBaseDePruebas("otra_base_descartable"));
     }
 
@@ -93,23 +125,26 @@ public class AislamientoBasePruebasTest {
     @DisplayName("Con URL explicita valida se resuelven los parametros de pruebas")
     void testUrlExplicitaValidaSeResuelve() {
         java.util.Map<String, String> entorno = new java.util.HashMap<>();
-        entorno.put(ConexionBD.ENV_TEST_DB_URL, "jdbc:postgresql://127.0.0.1:55432/tpi_pa2_r1_fix_test_20261111");
+        entorno.put(ConexionBD.ENV_TEST_DB_URL, "jdbc:postgresql://127.0.0.1:55432/tpi_pa2_r1_base_descartable_local");
         entorno.put(ConexionBD.ENV_TEST_DB_USER, "postgres");
         entorno.put(ConexionBD.ENV_TEST_DB_PASSWORD, "");
         assertDoesNotThrow(() -> ConexionBD.leerParametrosDePruebas(entorno));
     }
 
     @Test
-    @DisplayName("La base de pruebas efectiva se verifica y nunca es una base reservada")
-    void testBaseEfectivaVerificada() throws Exception {
-        String url = System.getenv(ConexionBD.ENV_TEST_DB_URL);
-        org.junit.jupiter.api.Assumptions.assumeTrue(url != null && !url.trim().isEmpty(),
-                "Requiere TPI_TEST_DB_URL configurada para verificar la base efectiva.");
-        String efectiva = ConexionBD.validarDestinoDePruebas();
-        assertNotNull(efectiva);
-        assertTrue(!ConexionBD.BASES_PROTEGIDAS.contains(efectiva.toLowerCase(java.util.Locale.ROOT)),
-                "La base efectiva '" + efectiva + "' es una base reservada.");
-        assertEquals(ConexionBD.extraerNombreBase(url), efectiva,
-                "La base conectada debe coincidir exactamente con la solicitada.");
+    @DisplayName("La suite unitaria AislamientoBasePruebasTest permanece aislada de PostgreSQL real")
+    void testSuiteUnitariaNoAbreConexionesReales() {
+        ConexionBD.activarModoPruebas();
+        java.util.concurrent.atomic.AtomicInteger invocaciones = new java.util.concurrent.atomic.AtomicInteger(0);
+        assertThrows(SQLException.class,
+                () -> ConexionBD.obtenerConexionCon(new java.util.HashMap<>(), (u, usr, p) -> {
+                    invocaciones.incrementAndGet();
+                    return null;
+                }),
+                "Con mapa de entorno vacio en modo PRUEBAS debe fallar cerrado sin invocar al conector JDBC.");
+        assertEquals(0, invocaciones.get(),
+                "No debe invocar al conector JDBC ni depender de TPI_TEST_DB_URL del SO.");
+        assertTrue(AislamientoBasePruebasIT.class.getSimpleName().endsWith("IT"),
+                "La verificacion real contra PostgreSQL debe vivir separada en AislamientoBasePruebasIT.");
     }
 }

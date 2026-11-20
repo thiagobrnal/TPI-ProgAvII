@@ -6,6 +6,7 @@ import com.gestionamateur.tpi.progav.dao.CanchaDAO;
 import com.gestionamateur.tpi.progav.dao.CategoriaDAO;
 import com.gestionamateur.tpi.progav.dao.ConfiguracionDAO;
 import com.gestionamateur.tpi.progav.dao.ConexionBD;
+import com.gestionamateur.tpi.progav.dao.ControlEjecucionIntegracion;
 import com.gestionamateur.tpi.progav.dao.EquipoDAO;
 import com.gestionamateur.tpi.progav.dao.FaseDAO;
 import com.gestionamateur.tpi.progav.dao.JugadorDAO;
@@ -25,6 +26,7 @@ import com.gestionamateur.tpi.progav.modelo.Torneo;
 import com.gestionamateur.tpi.progav.modelo.TorneoExcepcion;
 import com.gestionamateur.tpi.progav.modelo.Usuario;
 import com.gestionamateur.tpi.progav.vista.FrmCredencialJugador;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -67,7 +69,9 @@ public class DefectosCorregidosIT {
 
     @BeforeAll
     static void setUp() throws SQLException {
+        ControlEjecucionIntegracion.exigirHabilitacionExplicita("DefectosCorregidosIT");
         // DEF-004: la suite verifica su base de destino antes de operar.
+        ConexionBD.activarModoPruebas();
         ConexionBD.validarDestinoDePruebas();
         conn = ConexionBD.obtenerConexionTest();
         usuarioDAO = new UsuarioDAO();
@@ -80,6 +84,17 @@ public class DefectosCorregidosIT {
         partidoDAO = new PartidoDAO();
         faseDAO = new FaseDAO();
         authService = new AuthService();
+    }
+
+    @AfterAll
+    static void restaurarModoConexion() throws SQLException {
+        try {
+            if (conn != null && !conn.isClosed()) {
+                conn.close();
+            }
+        } finally {
+            ConexionBD.restablecerModoPorDefecto();
+        }
     }
 
     private String sufijo() {

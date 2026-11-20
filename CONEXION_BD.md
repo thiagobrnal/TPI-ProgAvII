@@ -167,3 +167,20 @@ Los parámetros utilizados para ejecutar `psql` coinciden conceptualmente con la
 
 Una vez ejecutados ambos scripts, la comprobación con `mvn compile exec:java "-Dexec.mainClass=com.gestionamateur.tpi.progav.dao.ConexionBD"` validará la conectividad contra la base de datos ya inicializada.
 
+---
+
+## 7. Separación entre pruebas unitarias e integración PostgreSQL (`CORR-E2-MAVEN-IT-01`)
+
+- **Pruebas unitarias exclusivas (sin base de datos):** Los comandos convencionales `mvn test`, `mvn package` y `mvn verify` (sin perfil adicional) ejecutan únicamente las `16` suites `*Test` a través de `maven-surefire-plugin:3.2.5`, excluyendo explícitamente `**/*IT.java`.
+- **Perfil dedicado de integración (`integracion`):** Las `11` suites `*IT` se ejecutan únicamente al activar explícitamente el perfil `-Pintegracion` (sin activación automática por entorno) en fase `integration-test` de forma secuencial (`forkCount=1`, `parallel=none`, `runOrder=alphabetical`). Además, cada suite `*IT` requiere simultáneamente:
+  1. Autorización explícita por propiedad del sistema: `-Dtpi.it.habilitado=true`.
+  2. Base descartable configurada explícitamente en `TPI_TEST_DB_URL` (distinta de `TPI_DB_URL` y de `ConexionBD.BASES_PROTEGIDAS`), inicializada previamente con `schema.sql` y `seed_data.sql` sobre una instancia PostgreSQL 17 descartable.
+- **Comportamiento fail-closed:** Definir únicamente `TPI_TEST_DB_URL` sin `-Pintegracion -Dtpi.it.habilitado=true` **nunca** abre conexiones a PostgreSQL. Activar `-Pintegracion` sin `TPI_TEST_DB_URL` rechaza antes de conectar.
+- **Comando de referencia offline para ejecutar las `11` suites `*IT` contra base descartable:**
+
+```powershell
+mvn -o -Pintegracion verify "-Dtpi.it.habilitado=true"
+```
+
+- **Selección acotada u omisión dentro del perfil:** Puede filtrarse una suite específica con `"-Dit.test=NombreIT"` o desactivar la ejecución integral con `-DskipITs=true`.
+

@@ -1,10 +1,11 @@
 package com.gestionamateur.tpi.progav.vista;
 
-import com.gestionamateur.tpi.progav.dao.ConexionBD;
-import com.gestionamateur.tpi.progav.dao.ConsultaPublicaDAO;
-import com.gestionamateur.tpi.progav.servicio.ConsultaPublicaService;
+import com.gestionamateur.tpi.progav.dao.*;
+import com.gestionamateur.tpi.progav.modelo.*;
+import com.gestionamateur.tpi.progav.servicio.*;
 import com.gestionamateur.tpi.progav.vista.FrmConsultaPublica.EstadoSeccion;
 import com.gestionamateur.tpi.progav.vista.FrmConsultaPublica.SeccionPublica;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -36,8 +37,10 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
@@ -66,7 +69,9 @@ public class ConsultaPublicaIntegradaIT {
     private static final Pattern PATRON_RESULTADO = Pattern.compile("^\\d+ - \\d+$");
 
     @BeforeAll
-    static void verificarEntornoFailClosedPostgres17() throws SQLException {
+    static void verificarEntornoFailClosedPostgres17() throws Exception {
+        ControlEjecucionIntegracion.exigirHabilitacionExplicita("ConsultaPublicaIntegradaIT");
+        ConexionBD.activarModoPruebas();
         String baseEfectiva = ConexionBD.validarDestinoDePruebas();
         assertNotNull(baseEfectiva, "Debe existir una base efectiva de pruebas");
         assertFalse(baseEfectiva.isBlank(), "El nombre de la base efectiva no puede estar vacío");
@@ -82,6 +87,94 @@ public class ConsultaPublicaIntegradaIT {
             assertTrue(version.contains("PostgreSQL 17"),
                     "Se esperaba PostgreSQL 17.x, pero se obtuvo: " + version);
         }
+
+        asegurarFixtureConsultaPublica();
+    }
+
+    private static void asegurarFixtureConsultaPublica() throws Exception {
+        ConsultaPublicaService servicio = new ConsultaPublicaService();
+        List<Object[]> torneos = servicio.torneos();
+        List<Object[]> equipos = servicio.equipos();
+        boolean faltaDatos = torneos.isEmpty() || equipos.isEmpty();
+        if (!faltaDatos) {
+            Long idPrimero = ((Number) torneos.get(0)[0]).longValue();
+            faltaDatos = servicio.fixture(idPrimero).isEmpty()
+                    || servicio.estadisticasDeJugadores(idPrimero).isEmpty()
+                    || servicio.avanceDeFases(idPrimero).isEmpty();
+        }
+        try (Connection conn = ConexionBD.obtenerConexionTest()) {
+            if (!faltaDatos) {
+                try (Statement st = conn.createStatement();
+                     ResultSet rs = st.executeQuery("SELECT count(*) FROM canchas")) {
+                    if (!rs.next() || rs.getInt(1) == 0) {
+                        faltaDatos = true;
+                    }
+                }
+            }
+            if (!faltaDatos && buscarTorneoConMultiplesPartidos(conn) == null) {
+                faltaDatos = true;
+            }
+        }
+        if (!faltaDatos) {
+            return;
+        }
+
+        String s = UUID.randomUUID().toString().substring(0, 8);
+        UsuarioDAO usuarioDAO = new UsuarioDAO();
+        ArbitroDAO arbitroDAO = new ArbitroDAO();
+        CategoriaDAO categoriaDAO = new CategoriaDAO();
+        CanchaDAO canchaDAO = new CanchaDAO();
+        JugadorDAO jugadorDAO = new JugadorDAO();
+
+        Usuario admin = new Usuario("cp_adm_" + s, "ClaveSegura123!", "cp_adm_" + s + "@test.local",
+                "Admin", "Publica", TiposDatos.Rol.ADMINISTRADOR);
+        admin.setId(usuarioDAO.insertar(admin, AuthService.hashearBCrypt("ClaveSegura123!"), 1));
+        Usuario org = new Usuario("cp_org_" + s, "ClaveSegura123!", "cp_org_" + s + "@test.local",
+                "Org", "Publica", TiposDatos.Rol.ORGANIZADOR);
+        org.setId(usuarioDAO.insertar(org, AuthService.hashearBCrypt("ClaveSegura123!"), 2));
+        Usuario cap1 = new Usuario("cp_cap1_" + s, "ClaveSegura123!", "cp_cap1_" + s + "@test.local",
+                "Cap1", "Publica", TiposDatos.Rol.CAPITAN);
+        cap1.setId(usuarioDAO.insertar(cap1, AuthService.hashearBCrypt("ClaveSegura123!"), 4));
+        Usuario cap2 = new Usuario("cp_cap2_" + s, "ClaveSegura123!", "cp_cap2_" + s + "@test.local",
+                "Cap2", "Publica", TiposDatos.Rol.CAPITAN);
+        cap2.setId(usuarioDAO.insertar(cap2, AuthService.hashearBCrypt("ClaveSegura123!"), 4));
+        Arbitro arb = new Arbitro("cp_arb_" + s, "ClaveSegura123!", "cp_arb_" + s + "@test.local",
+                "Arb", "Publica", "Regional", "3764001122");
+        arb.setId(arbitroDAO.insertar(arb, AuthService.hashearBCrypt("ClaveSegura123!")));
+
+        Categoria cat = categoriaDAO.buscarPorId(2L);
+        Cancha cancha = new Cancha("Cancha Consulta " + s, "Av. Publica 100", "Cesped Natural");
+        canchaDAO.insertar(cancha);
+
+        EquipoService equipoService = new EquipoService();
+        Equipo eq1 = equipoService.registrarEquipo("Eq Consulta 1 " + s, "C1", cat.getId(), "Azul", cancha,
+                cap1.getId(), admin);
+        Equipo eq2 = equipoService.registrarEquipo("Eq Consulta 2 " + s, "C2", cat.getId(), "Rojo", cancha,
+                cap2.getId(), admin);
+
+        int dniBase = 31000000 + Math.abs(s.hashCode() % 8000000);
+        Jugador j1 = new Jugador(eq1.getIdEquipo(), "Jug Consulta 1 " + s, dniBase,
+                new Date(95, 3, 10), "Delantero", TiposDatos.EstadoJugador.ACTIVO);
+        j1.setId(jugadorDAO.insertar(j1, eq1.getIdEquipo()));
+
+        TorneoService torneoService = new TorneoService();
+        // Prefijo "00 " garantiza orden inicial estable en cualquier collation para el selector CU-08..CU-11.
+        Torneo torneo = torneoService.crearTorneo("00 Torneo Consulta Integrada " + s, "LIGA", 4, new Date(), admin);
+        Fase fase = torneoService.listarFasesDeTorneo(torneo.getIdTorneo()).get(0);
+
+        PartidoService partidoService = new PartidoService();
+        Partido p1 = partidoService.programarPartido(fase.getIdFase(), eq1.getIdEquipo(), eq2.getIdEquipo(),
+                cancha.getIdCancha(), arb.getId(), new Date(System.currentTimeMillis() - 3600000L), 90, org);
+        partidoService.programarPartido(fase.getIdFase(), eq2.getIdEquipo(), eq1.getIdEquipo(),
+                cancha.getIdCancha(), arb.getId(), new Date(System.currentTimeMillis() + 86400000L), 90, org);
+
+        partidoService.registrarIncidencia(p1.getIdPartido(), j1.getId(), 15, TiposDatos.TipoAccion.GOL,
+                null, "Gol semilla consulta publica", arb);
+    }
+
+    @AfterAll
+    static void restaurarModoConexion() {
+        ConexionBD.restablecerModoPorDefecto();
     }
 
     @Test
